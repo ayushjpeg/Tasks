@@ -39,3 +39,5 @@ The container serves the production bundle via Vite preview on port 8006.
 ## GitHub Actions deploy
 
 `.github/workflows/deploy.yml` targets your existing self-hosted Linux runner (same labels as the CCTV workflow). It builds the Docker image on each push to `main`, replaces the running container, and injects secrets such as `TZ` if needed.
+
+This application is still in development
