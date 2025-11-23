@@ -1,0 +1,29 @@
+name: Deploy Task Orchestrator
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t task-orchestrator:latest .
+
+      - name: Stop old container
+        run: docker rm -f task-orchestrator || true
+
+      - name: Run new container
+        env:
+          TZ: Asia/Kolkata
+        run: |
+          docker run -d --restart unless-stopped \
+            --name task-orchestrator \
+            -p 8006:8006 \
+            -e TZ="$TZ" \
+            task-orchestrator:latest
