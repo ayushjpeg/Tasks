@@ -45,3 +45,5 @@ The container serves the production bundle via Vite preview on port 8006.
 The shared FastAPI backend that will eventually connect Tasks, Food, Gym, and CCTV now lives in `backend/`. It exposes REST endpoints plus media upload routes and ships with Alembic migrations + Docker assets. See `backend/README.md` for setup instructions.
 
 This application is still in development
+
+# This app is under dev
