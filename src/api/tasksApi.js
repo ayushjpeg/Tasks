@@ -109,13 +109,13 @@ const fromApiHistory = (record, fallbackTitle) => ({
 })
 
 export const fetchTasks = async () => {
-  const data = await request('/tasks')
+  const data = await request('/tasks/')
   return data.map(fromApiTask)
 }
 
 export const createTask = async (task) => {
   const payload = toApiTaskPayload(task)
-  const data = await request('/tasks', {
+  const data = await request('/tasks/', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
