@@ -40,4 +40,8 @@ The container serves the production bundle via Vite preview on port 8006.
 
 `.github/workflows/deploy.yml` targets your existing self-hosted Linux runner (same labels as the CCTV workflow). It builds the Docker image on each push to `main`, replaces the running container, and injects secrets such as `TZ` if needed.
 
+## Unified backend
+
+The shared FastAPI backend that will eventually connect Tasks, Food, Gym, and CCTV now lives in `backend/`. It exposes REST endpoints plus media upload routes and ships with Alembic migrations + Docker assets. See `backend/README.md` for setup instructions.
+
 This application is still in development

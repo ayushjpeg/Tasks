@@ -1,8 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { nanoid } from 'nanoid'
 import dayjs from './utils/dates'
-import { useLocalStorage } from './hooks/useLocalStorage'
-import { defaultTasks } from './data/defaultTasks'
 import { buildPlanner } from './utils/scheduler'
 import { completeTask, skipTaskOccurrence } from './utils/taskMutations'
 import DailyBoard from './components/DailyBoard'
@@ -10,6 +8,14 @@ import WeeklyBoard from './components/WeeklyBoard'
 import TaskLibrary from './components/TaskLibrary'
 import HistoryView from './components/HistoryView'
 import TaskModal from './components/TaskModal'
+import {
+  createTask as apiCreateTask,
+  deleteTask as apiDeleteTask,
+  fetchTaskHistory,
+  fetchTasks,
+  logTaskHistory,
+  updateTask as apiUpdateTask,
+} from './api/tasksApi'
 
 const tabs = [
   { id: 'daily', label: 'Daily' },
@@ -19,12 +25,43 @@ const tabs = [
 ]
 
 function App() {
-  const [tasks, setTasks] = useLocalStorage('task-orchestrator-tasks', defaultTasks)
-  const [history, setHistory] = useLocalStorage('task-orchestrator-history', [])
+  const [tasks, setTasks] = useState([])
+  const [history, setHistory] = useState([])
   const [activeDate, setActiveDate] = useState(dayjs().format('YYYY-MM-DD'))
   const [view, setView] = useState('daily')
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [syncMessage, setSyncMessage] = useState('')
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let canceled = false
+    const load = async () => {
+      setIsLoading(true)
+      setLoadError('')
+      try {
+        const [taskData, historyData] = await Promise.all([fetchTasks(), fetchTaskHistory()])
+        if (!canceled) {
+          setTasks(taskData)
+          setHistory(historyData)
+        }
+      } catch (error) {
+        console.error('Failed to load data', error)
+        if (!canceled) {
+          setLoadError('Unable to load data from the backend. Retry or check your network connection.')
+        }
+      } finally {
+        if (!canceled) {
+          setIsLoading(false)
+        }
+      }
+    }
+    load()
+    return () => {
+      canceled = true
+    }
+  }, [])
 
   const weekStart = dayjs(activeDate).startOf('week')
   const weekKey = weekStart.format('YYYY-MM-DD')
@@ -43,99 +80,138 @@ function App() {
     setSelectedTask(null)
   }
 
-  const handleSaveTask = (task) => {
-    setTasks((prev) => {
-      const exists = prev.some((item) => item.id === task.id)
-      if (exists) {
-        return prev.map((item) => (item.id === task.id ? task : item))
+  const handleSaveTask = async (task) => {
+    try {
+      setSyncMessage(task.id ? 'Updating task…' : 'Creating task…')
+      let saved
+      if (task.id && tasks.some((t) => t.id === task.id)) {
+        saved = await apiUpdateTask(task)
+      } else {
+        // Remove any local id before sending to backend
+        const { id, ...rest } = task
+        saved = await apiCreateTask(rest)
       }
-      return [task, ...prev]
-    })
-    closeTaskModal()
+      setTasks((prev) => {
+        const exists = prev.some((item) => item.id === saved.id)
+        if (exists) {
+          return prev.map((item) => (item.id === saved.id ? saved : item))
+        }
+        return [saved, ...prev]
+      })
+      closeTaskModal()
+    } catch (error) {
+      console.error('Failed to save task', error)
+      window.alert('Unable to save the task. Please try again.')
+    } finally {
+      setSyncMessage('')
+    }
   }
 
-  const handleDeleteTask = (taskId) => {
+  const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Delete this task template?')) return
-    setTasks((prev) => prev.filter((task) => task.id !== taskId))
+    try {
+      setSyncMessage('Deleting task…')
+      await apiDeleteTask(taskId)
+      setTasks((prev) => prev.filter((task) => task.id !== taskId))
+    } catch (error) {
+      console.error('Failed to delete task', error)
+      window.alert('Unable to delete that task right now.')
+    } finally {
+      setSyncMessage('')
+    }
   }
 
-  const handleCompleteTask = (card, completionDate) => {
+  const handleCompleteTask = async (card, completionDate) => {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
-    const trimmedNote = undefined
+    const trimmedNote = ''
     const chunkMinutes = card.chunkMinutes ?? card.duration ?? template.duration
     const completionStamp = dayjs(completionDate).toISOString()
 
-    if (template.recurrence?.mode === 'floating') {
-      const remaining = Math.max(0, (template.remainingDuration ?? template.duration) - chunkMinutes)
-      const noteEntry = trimmedNote
-        ? {
-            id: nanoid(),
-            body: trimmedNote,
-            recordedAt: completionStamp,
-          }
-        : null
+    try {
+      setSyncMessage('Logging completion…')
+      let historyPromise
+      if (template.recurrence?.mode === 'floating') {
+        const remaining = Math.max(0, (template.remainingDuration ?? template.duration) - chunkMinutes)
+        const noteEntry = trimmedNote
+          ? {
+              id: nanoid(),
+              body: trimmedNote,
+              recordedAt: completionStamp,
+            }
+          : null
+        const notesLog = noteEntry ? [noteEntry, ...(template.notesLog ?? [])] : template.notesLog ?? []
 
-      setTasks((prev) => {
-        const next = []
-        prev.forEach((item) => {
-          if (item.id !== template.id) {
-            next.push(item)
-            return
-          }
-          const withNotes = {
-            ...item,
-            notesLog: noteEntry ? [noteEntry, ...(item.notesLog ?? [])] : item.notesLog ?? [],
+        historyPromise = logTaskHistory(
+          template.id,
+          {
+            completedAt: completionStamp,
+            durationMinutes: chunkMinutes,
+            note: trimmedNote,
+          },
+          template.title,
+        )
+
+        if (remaining > 0) {
+          const updatedTemplate = {
+            ...template,
+            remainingDuration: remaining,
+            notesLog,
             lastCompletedAt: completionStamp,
           }
-          if (remaining > 0) {
-            next.push({ ...withNotes, remainingDuration: remaining })
-          }
-        })
-        return next
-      })
-      setHistory((prev) => [
-        {
-          id: nanoid(),
-          taskId: template.id,
-          title: template.title,
-          duration: chunkMinutes,
-          completedAt: completionStamp,
-          note: trimmedNote || '',
-        },
-        ...prev,
-      ])
-      return
-    }
+          const saved = await apiUpdateTask(updatedTemplate)
+          setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+        } else {
+          await apiDeleteTask(template.id)
+          setTasks((prev) => prev.filter((task) => task.id !== template.id))
+        }
+      } else {
+        const updated = completeTask(template, completionDate, trimmedNote || undefined)
+        const saved = await apiUpdateTask(updated)
+        setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+        historyPromise = logTaskHistory(
+          template.id,
+          {
+            completedAt: completionStamp,
+            durationMinutes: chunkMinutes,
+            note: trimmedNote,
+          },
+          template.title,
+        )
+      }
 
-    const updated = completeTask(template, completionDate, trimmedNote || undefined)
-    setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
-    setHistory((prev) => [
-      {
-        id: nanoid(),
-        taskId: updated.id,
-        title: updated.title,
-        duration: updated.duration,
-        completedAt: completionStamp,
-        note: trimmedNote || '',
-      },
-      ...prev,
-    ])
+      const historyEntry = await historyPromise
+      setHistory((prev) => [historyEntry, ...prev])
+    } catch (error) {
+      console.error('Failed to log completion', error)
+      window.alert('Unable to log that completion. Please retry in a moment.')
+    } finally {
+      setSyncMessage('')
+    }
   }
 
-  const handleSnoozeTask = (card, referenceDate) => {
+  const handleSnoozeTask = async (card, referenceDate) => {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
-    if (template.recurrence?.mode === 'floating') {
-      const deferDate = dayjs(referenceDate).add(1, 'day').format('YYYY-MM-DD')
-      setTasks((prev) => prev.map((item) => (item.id === template.id ? { ...item, deferUntil: deferDate } : item)))
-      return
+    const baseDate = dayjs(referenceDate)
+    const updatedTemplate =
+      template.recurrence?.mode === 'floating'
+        ? { ...template, deferUntil: baseDate.add(1, 'day').format('YYYY-MM-DD') }
+        : skipTaskOccurrence(template, referenceDate)
+
+    try {
+      setSyncMessage('Updating task…')
+      const saved = await apiUpdateTask(updatedTemplate)
+      setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+    } catch (error) {
+      console.error('Failed to snooze task', error)
+      window.alert('Unable to move that task. Try again later.')
+    } finally {
+      setSyncMessage('')
     }
-    const updated = skipTaskOccurrence(template, referenceDate)
-    setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
   }
 
-  const handleRescheduleTask = (card) => {
+  const handleRescheduleTask = async (card) => {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
     const suggested = dayjs(card.dueDate ?? activeDate).add(1, 'day').format('YYYY-MM-DD')
@@ -146,10 +222,22 @@ function App() {
       window.alert('Please enter a valid date in YYYY-MM-DD format.')
       return
     }
-    if (template.recurrence?.mode === 'floating') {
-      setTasks((prev) => prev.map((item) => (item.id === template.id ? { ...item, deferUntil: candidate.format('YYYY-MM-DD') } : item)))
-    } else {
-      setTasks((prev) => prev.map((item) => (item.id === template.id ? { ...item, nextDueDate: candidate.format('YYYY-MM-DD') } : item)))
+
+    const formatted = candidate.format('YYYY-MM-DD')
+    const updatedTemplate =
+      template.recurrence?.mode === 'floating'
+        ? { ...template, deferUntil: formatted }
+        : { ...template, nextDueDate: formatted }
+
+    try {
+      setSyncMessage('Rescheduling task…')
+      const saved = await apiUpdateTask(updatedTemplate)
+      setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+    } catch (error) {
+      console.error('Failed to reschedule task', error)
+      window.alert('Unable to reschedule right now.')
+    } finally {
+      setSyncMessage('')
     }
   }
 
@@ -194,11 +282,26 @@ function App() {
     )
   }
 
+  if (isLoading) {
+    return (
+      <div className="app-shell">
+        <header className="topbar">
+          <div>
+            <h1>Task Orchestrator</h1>
+            <p className="muted">Loading your templates…</p>
+          </div>
+        </header>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div>
           <h1>Task Orchestrator</h1>
+          {loadError && <p className="muted">{loadError}</p>}
+          {!loadError && syncMessage && <p className="muted">{syncMessage}</p>}
         </div>
         <div className="quick-stats">
           <article>
