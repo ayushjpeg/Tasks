@@ -8,12 +8,19 @@ on:
 jobs:
   deploy:
     runs-on: [self-hosted, linux]
+    env:
+      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+      VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -t task-orchestrator:latest .
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
+            --build-arg VITE_API_KEY="$VITE_API_KEY" \
+            -t task-orchestrator:latest .
 
       - name: Stop old container
         run: docker rm -f task-orchestrator || true
