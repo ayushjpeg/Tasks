@@ -11,6 +11,8 @@ jobs:
     env:
       VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
       VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
+      VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+      VITE_GEMINI_MODEL: ${{ secrets.VITE_GEMINI_MODEL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,6 +22,8 @@ jobs:
           docker build \
             --build-arg VITE_API_BASE_URL="$VITE_API_BASE_URL" \
             --build-arg VITE_API_KEY="$VITE_API_KEY" \
+            --build-arg VITE_GEMINI_API_KEY="$VITE_GEMINI_API_KEY" \
+            --build-arg VITE_GEMINI_MODEL="$VITE_GEMINI_MODEL" \
             -t task-orchestrator:latest .
 
       - name: Stop old container
