@@ -1,5 +1,6 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
-const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-1.5-pro'
+// Default to a widely available model for v1beta generateContent.
+const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash'
 
 const buildGenerationConfig = (options = {}) => {
   const { temperature, top_p, top_k, max_output_tokens } = options
