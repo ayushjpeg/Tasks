@@ -348,38 +348,38 @@ function App() {
           <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{aiPlan}</pre>
         </section>
       )}
+
+      {promptOpen && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <header className="modal__header">
+              <h3>Edit prompt before sending</h3>
+              <button className="btn-secondary" onClick={() => setPromptOpen(false)}>
+                Close
+              </button>
+            </header>
+            <section className="modal__body">
+              <p className="muted">You can rewrite the entire prompt. Tasks JSON from backend is included below.</p>
+              <textarea
+                value={promptDraft}
+                onChange={(e) => setPromptDraft(e.target.value)}
+                rows={16}
+                style={{ width: '100%' }}
+              />
+            </section>
+            <footer className="modal__footer" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => setPromptOpen(false)}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={runAiPlan} disabled={!promptDraft.trim()}>
+                Send to AI
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   )
-            <TaskModal open={taskModalOpen} initialTask={selectedTask} onClose={closeTaskModal} onSave={handleSaveTask} />
-
-            {promptOpen && (
-              <div className="modal-backdrop">
-                <div className="modal">
-                  <header className="modal__header">
-                    <h3>Edit prompt before sending</h3>
-                    <button className="btn-secondary" onClick={() => setPromptOpen(false)}>
-                      Close
-                    </button>
-                  </header>
-                  <section className="modal__body">
-                    <p className="muted">You can rewrite the entire prompt. Tasks JSON from backend is included below.</p>
-                    <textarea
-                      value={promptDraft}
-                      onChange={(e) => setPromptDraft(e.target.value)}
-                      rows={16}
-                      style={{ width: '100%' }}
-                    />
-                  </section>
-                  <footer className="modal__footer" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                    <button className="btn-secondary" onClick={() => setPromptOpen(false)}>
-                      Cancel
-                    </button>
-                    <button className="btn-primary" onClick={runAiPlan} disabled={!promptDraft.trim()}>
-                      Send to AI
-                    </button>
-                  </footer>
-                </div>
-              </div>
-            )}
+}
 
 export default App
