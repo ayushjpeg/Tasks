@@ -11,9 +11,11 @@ import TaskModal from './components/TaskModal'
 import {
   createTask as apiCreateTask,
   deleteTask as apiDeleteTask,
+  fetchPrompt,
   fetchTaskHistory,
   fetchTasks,
   logTaskHistory,
+  savePrompt,
   scheduleCommit,
   schedulePreview,
   updateTask as apiUpdateTask,
@@ -39,8 +41,8 @@ function App() {
   const [loadError, setLoadError] = useState('')
   const [aiPlan, setAiPlan] = useState('')
   const [promptDraft, setPromptDraft] = useState('')
-  const [promptContext, setPromptContext] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
+  const [promptLoading, setPromptLoading] = useState(false)
 
   useEffect(() => {
     let canceled = false
@@ -243,44 +245,63 @@ function App() {
     )
   }
 
-  const handlePlanWeek = async () => {
+  const loadPrompt = async () => {
+    setPromptLoading(true)
     try {
-      setSyncMessage('Preparing AI plan…')
-      const preview = await schedulePreview()
-      const taskJson = JSON.stringify(preview.tasks, null, 2)
-      const seed = `${preview.prompt}\n\nTasks JSON:\n${taskJson}`
-      setPromptDraft(seed)
-      setPromptContext({ weekStart: preview.week_start, weekEnd: preview.week_end, tasks: preview.tasks })
-      setPromptOpen(true)
+      const prompt = await fetchPrompt()
+      setPromptDraft(prompt)
     } catch (error) {
-      console.error('Failed to prepare plan', error)
-      window.alert('Unable to build AI plan right now.')
+      console.error('Failed to load prompt', error)
+      window.alert('Unable to load the prompt. Please try again.')
+    } finally {
+      setPromptLoading(false)
+    }
+  }
+
+  const handleOpenPromptEditor = async () => {
+    await loadPrompt()
+    setPromptOpen(true)
+  }
+
+  const handleSavePrompt = async () => {
+    try {
+      setSyncMessage('Saving prompt…')
+      const saved = await savePrompt(promptDraft)
+      setPromptDraft(saved)
+      setPromptOpen(false)
+    } catch (error) {
+      console.error('Failed to save prompt', error)
+      window.alert('Unable to save the prompt. Please try again.')
+    } finally {
       setSyncMessage('')
     }
   }
 
-  const runAiPlan = async () => {
-    if (!promptContext) return
+  const handlePlanWeek = async () => {
     try {
+      setSyncMessage('Preparing AI plan…')
+      const [promptValue, preview] = await Promise.all([fetchPrompt(), schedulePreview()])
+      const taskJson = JSON.stringify(preview.tasks, null, 2)
+      const fullPrompt = `${promptValue}\n\nTasks JSON for upcoming week:\n${taskJson}`
+
       setSyncMessage('Calling AI…')
-      const aiResponse = await generatePlan({ prompt: promptDraft })
+      const aiResponse = await generatePlan({ prompt: fullPrompt })
       setAiPlan(aiResponse)
       setSyncMessage('Recording plan…')
       await scheduleCommit({
-        weekStart: promptContext.weekStart,
-        weekEnd: promptContext.weekEnd,
-        plan: promptContext.tasks,
+        weekStart: preview.week_start,
+        weekEnd: preview.week_end,
+        plan: preview.tasks,
         aiResponse,
       })
       window.alert('AI weekly plan ready. Check console for details.')
-      console.info('AI plan prompt:', promptDraft)
+      console.info('AI plan prompt:', fullPrompt)
       console.info('AI plan response:', aiResponse)
     } catch (error) {
       console.error('Failed to plan week', error)
       window.alert('Unable to build AI plan right now.')
     } finally {
       setSyncMessage('')
-      setPromptOpen(false)
     }
   }
 
@@ -308,6 +329,9 @@ function App() {
         <div className="quick-actions">
           <button className="btn-primary" onClick={handlePlanWeek}>
             Plan week with AI
+          </button>
+          <button className="btn-secondary" onClick={handleOpenPromptEditor}>
+            Edit prompt
           </button>
         </div>
         <div className="quick-stats">
@@ -359,20 +383,21 @@ function App() {
               </button>
             </header>
             <section className="modal__body">
-              <p className="muted">You can rewrite the entire prompt. Tasks JSON from backend is included below.</p>
+              <p className="muted">This prompt is stored in the backend and used as-is when planning the week.</p>
               <textarea
                 value={promptDraft}
                 onChange={(e) => setPromptDraft(e.target.value)}
                 rows={16}
                 style={{ width: '100%' }}
+                disabled={promptLoading}
               />
             </section>
             <footer className="modal__footer" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               <button className="btn-secondary" onClick={() => setPromptOpen(false)}>
                 Cancel
               </button>
-              <button className="btn-primary" onClick={runAiPlan} disabled={!promptDraft.trim()}>
-                Send to AI
+              <button className="btn-primary" onClick={handleSavePrompt} disabled={!promptDraft.trim() || promptLoading}>
+                Save prompt
               </button>
             </footer>
           </div>
