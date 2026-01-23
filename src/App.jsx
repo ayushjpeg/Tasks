@@ -14,8 +14,11 @@ import {
   fetchTaskHistory,
   fetchTasks,
   logTaskHistory,
+  scheduleCommit,
+  schedulePreview,
   updateTask as apiUpdateTask,
 } from './api/tasksApi'
+import { generatePlan } from './api/aiApi'
 
 const tabs = [
   { id: 'daily', label: 'Daily' },
@@ -34,6 +37,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [syncMessage, setSyncMessage] = useState('')
   const [loadError, setLoadError] = useState('')
+  const [aiPlan, setAiPlan] = useState('')
 
   useEffect(() => {
     let canceled = false
@@ -282,6 +286,31 @@ function App() {
     )
   }
 
+  const handlePlanWeek = async () => {
+    try {
+      setSyncMessage('Preparing AI plan…')
+      const preview = await schedulePreview()
+      setSyncMessage('Calling AI…')
+      const aiResponse = await generatePlan({ prompt: preview.prompt })
+      setAiPlan(aiResponse)
+      setSyncMessage('Recording plan…')
+      await scheduleCommit({
+        weekStart: preview.week_start,
+        weekEnd: preview.week_end,
+        plan: preview.tasks,
+        aiResponse,
+      })
+      window.alert('AI weekly plan ready. Check console for details.')
+      console.info('AI plan prompt:', preview.prompt)
+      console.info('AI plan response:', aiResponse)
+    } catch (error) {
+      console.error('Failed to plan week', error)
+      window.alert('Unable to build AI plan right now.')
+    } finally {
+      setSyncMessage('')
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="app-shell">
@@ -302,6 +331,11 @@ function App() {
           <h1>Task Orchestrator</h1>
           {loadError && <p className="muted">{loadError}</p>}
           {!loadError && syncMessage && <p className="muted">{syncMessage}</p>}
+        </div>
+        <div className="quick-actions">
+          <button className="btn-primary" onClick={handlePlanWeek}>
+            Plan week with AI
+          </button>
         </div>
         <div className="quick-stats">
           <article>
@@ -330,6 +364,17 @@ function App() {
       {renderView()}
 
       <TaskModal open={taskModalOpen} initialTask={selectedTask} onClose={closeTaskModal} onSave={handleSaveTask} />
+      {aiPlan && (
+        <section className="panel">
+          <header className="panel__header">
+            <div>
+              <p className="eyebrow">AI Plan</p>
+              <h2>Latest response</h2>
+            </div>
+          </header>
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{aiPlan}</pre>
+        </section>
+      )}
     </div>
   )
 }

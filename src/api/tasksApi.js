@@ -153,3 +153,28 @@ export const logTaskHistory = async (taskId, entry, fallbackTitle) => {
   })
   return fromApiHistory(data, fallbackTitle)
 }
+
+export const schedulePreview = async (weekStart, weekEnd) => {
+  const body = {}
+  if (weekStart) body.week_start = weekStart
+  if (weekEnd) body.week_end = weekEnd
+  const data = await request('/tasks/schedule/preview', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  return data
+}
+
+export const scheduleCommit = async ({ weekStart, weekEnd, plan, aiResponse }) => {
+  const payload = {
+    week_start: weekStart,
+    week_end: weekEnd,
+    plan,
+    ai_response: aiResponse || null,
+  }
+  const data = await request('/tasks/schedule/commit', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return data
+}

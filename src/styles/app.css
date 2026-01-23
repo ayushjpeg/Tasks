@@ -92,6 +92,12 @@ textarea {
   flex-wrap: wrap;
 }
 
+.quick-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .quick-stats article {
   position: relative;
   min-width: 120px;
