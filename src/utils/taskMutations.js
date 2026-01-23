@@ -16,7 +16,13 @@ const nextWeeklyFrom = (task, fromDate) => {
 export const completeTask = (task, date, note) => {
   const done = dayjs(date)
   let nextDue = task.nextDueDate
-  if (task.recurrence?.mode === 'gap') {
+
+  if (task.recurrence?.mode === 'repeat') {
+    const startAfter = task.recurrence.start_after_days ?? 0
+    nextDue = iso(done.add(Math.max(1, startAfter || 1), 'day'))
+  } else if (task.recurrence?.mode === 'one_time') {
+    nextDue = null
+  } else if (task.recurrence?.mode === 'gap') {
     const gap = task.recurrence.gapDays ?? 1
     nextDue = iso(done.add(gap, 'day'))
   } else if (task.recurrence?.mode === 'weekly') {
@@ -44,8 +50,12 @@ export const completeTask = (task, date, note) => {
 
 export const skipTaskOccurrence = (task, date) => {
   const scheduledDate = dayjs(date)
-  if (task.recurrence?.mode === 'single') {
-    return { ...task, nextDueDate: iso(scheduledDate.add(1, 'day')) }
+  if (task.recurrence?.mode === 'repeat') {
+    const startAfter = task.recurrence.start_after_days ?? 0
+    return { ...task, nextDueDate: iso(scheduledDate.add(Math.max(1, startAfter || 1), 'day')) }
+  }
+  if (task.recurrence?.mode === 'one_time') {
+    return { ...task, nextDueDate: null }
   }
   if (task.recurrence?.mode === 'gap') {
     return { ...task, nextDueDate: iso(scheduledDate.add(1, 'day')) }
