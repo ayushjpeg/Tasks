@@ -38,6 +38,9 @@ function App() {
   const [syncMessage, setSyncMessage] = useState('')
   const [loadError, setLoadError] = useState('')
   const [aiPlan, setAiPlan] = useState('')
+  const [promptDraft, setPromptDraft] = useState('')
+  const [promptContext, setPromptContext] = useState(null)
+  const [promptOpen, setPromptOpen] = useState(false)
 
   useEffect(() => {
     let canceled = false
@@ -244,24 +247,40 @@ function App() {
     try {
       setSyncMessage('Preparing AI plan…')
       const preview = await schedulePreview()
+      const taskJson = JSON.stringify(preview.tasks, null, 2)
+      const seed = `${preview.prompt}\n\nTasks JSON:\n${taskJson}`
+      setPromptDraft(seed)
+      setPromptContext({ weekStart: preview.week_start, weekEnd: preview.week_end, tasks: preview.tasks })
+      setPromptOpen(true)
+    } catch (error) {
+      console.error('Failed to prepare plan', error)
+      window.alert('Unable to build AI plan right now.')
+      setSyncMessage('')
+    }
+  }
+
+  const runAiPlan = async () => {
+    if (!promptContext) return
+    try {
       setSyncMessage('Calling AI…')
-      const aiResponse = await generatePlan({ prompt: preview.prompt })
+      const aiResponse = await generatePlan({ prompt: promptDraft })
       setAiPlan(aiResponse)
       setSyncMessage('Recording plan…')
       await scheduleCommit({
-        weekStart: preview.week_start,
-        weekEnd: preview.week_end,
-        plan: preview.tasks,
+        weekStart: promptContext.weekStart,
+        weekEnd: promptContext.weekEnd,
+        plan: promptContext.tasks,
         aiResponse,
       })
       window.alert('AI weekly plan ready. Check console for details.')
-      console.info('AI plan prompt:', preview.prompt)
+      console.info('AI plan prompt:', promptDraft)
       console.info('AI plan response:', aiResponse)
     } catch (error) {
       console.error('Failed to plan week', error)
       window.alert('Unable to build AI plan right now.')
     } finally {
       setSyncMessage('')
+      setPromptOpen(false)
     }
   }
 
@@ -331,6 +350,36 @@ function App() {
       )}
     </div>
   )
-}
+            <TaskModal open={taskModalOpen} initialTask={selectedTask} onClose={closeTaskModal} onSave={handleSaveTask} />
+
+            {promptOpen && (
+              <div className="modal-backdrop">
+                <div className="modal">
+                  <header className="modal__header">
+                    <h3>Edit prompt before sending</h3>
+                    <button className="btn-secondary" onClick={() => setPromptOpen(false)}>
+                      Close
+                    </button>
+                  </header>
+                  <section className="modal__body">
+                    <p className="muted">You can rewrite the entire prompt. Tasks JSON from backend is included below.</p>
+                    <textarea
+                      value={promptDraft}
+                      onChange={(e) => setPromptDraft(e.target.value)}
+                      rows={16}
+                      style={{ width: '100%' }}
+                    />
+                  </section>
+                  <footer className="modal__footer" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button className="btn-secondary" onClick={() => setPromptOpen(false)}>
+                      Cancel
+                    </button>
+                    <button className="btn-primary" onClick={runAiPlan} disabled={!promptDraft.trim()}>
+                      Send to AI
+                    </button>
+                  </footer>
+                </div>
+              </div>
+            )}
 
 export default App
