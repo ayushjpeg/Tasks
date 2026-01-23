@@ -37,7 +37,7 @@ const request = async (path, { method = 'GET', body = undefined, headers = {} } 
 
 const fromApiRecurrence = (recurrence) => ({
   ...(recurrence?.config || {}),
-  mode: recurrence?.mode || 'gap',
+  mode: recurrence?.mode || 'repeat',
 })
 
 const toApiRecurrence = (recurrence = {}) => {

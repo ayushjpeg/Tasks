@@ -2,19 +2,10 @@ import dayjs from '../utils/dates'
 
 const describeRecurrence = (task) => {
   const mode = task.recurrence?.mode
-  if (mode === 'gap') return `Every ${task.recurrence.gapDays ?? 1} day(s)`
-  if (mode === 'weekly') {
-    const labels = (task.recurrence.days ?? []).map((day) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day])
-    return `Weekly on ${labels.join(', ') || 'choose days'}`
-  }
-  if (mode === 'single') {
-    const singleDate = task.recurrence.date || task.nextDueDate
-    return singleDate ? `On ${dayjs(singleDate).format('MMM D, YYYY')}` : 'Single date'
-  }
-  if (mode === 'floating') {
-    const remaining = task.remainingDuration ?? task.duration
-    return `Floating · ${remaining} min left`
-  }
+  const start = task.recurrence?.start_after_days ?? 0
+  const end = task.recurrence?.end_before_days ?? start
+  if (mode === 'repeat') return `Repeat window: day ${start} to day ${end}`
+  if (mode === 'one_time') return `One time between day ${start} and day ${end}`
   return 'One-off'
 }
 

@@ -134,57 +134,18 @@ function App() {
 
     try {
       setSyncMessage('Logging completion…')
-      let historyPromise
-      if (template.recurrence?.mode === 'floating') {
-        const remaining = Math.max(0, (template.remainingDuration ?? template.duration) - chunkMinutes)
-        const noteEntry = trimmedNote
-          ? {
-              id: nanoid(),
-              body: trimmedNote,
-              recordedAt: completionStamp,
-            }
-          : null
-        const notesLog = noteEntry ? [noteEntry, ...(template.notesLog ?? [])] : template.notesLog ?? []
-
-        historyPromise = logTaskHistory(
-          template.id,
-          {
-            completedAt: completionStamp,
-            durationMinutes: chunkMinutes,
-            note: trimmedNote,
-          },
-          template.title,
-        )
-
-        if (remaining > 0) {
-          const updatedTemplate = {
-            ...template,
-            remainingDuration: remaining,
-            notesLog,
-            lastCompletedAt: completionStamp,
-          }
-          const saved = await apiUpdateTask(updatedTemplate)
-          setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
-        } else {
-          await apiDeleteTask(template.id)
-          setTasks((prev) => prev.filter((task) => task.id !== template.id))
-        }
-      } else {
-        const updated = completeTask(template, completionDate, trimmedNote || undefined)
-        const saved = await apiUpdateTask(updated)
-        setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
-        historyPromise = logTaskHistory(
-          template.id,
-          {
-            completedAt: completionStamp,
-            durationMinutes: chunkMinutes,
-            note: trimmedNote,
-          },
-          template.title,
-        )
-      }
-
-      const historyEntry = await historyPromise
+      const updated = completeTask(template, completionDate, trimmedNote || undefined)
+      const saved = await apiUpdateTask(updated)
+      setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+      const historyEntry = await logTaskHistory(
+        template.id,
+        {
+          completedAt: completionStamp,
+          durationMinutes: chunkMinutes,
+          note: trimmedNote,
+        },
+        template.title,
+      )
       setHistory((prev) => [historyEntry, ...prev])
     } catch (error) {
       console.error('Failed to log completion', error)
@@ -197,11 +158,7 @@ function App() {
   const handleSnoozeTask = async (card, referenceDate) => {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
-    const baseDate = dayjs(referenceDate)
-    const updatedTemplate =
-      template.recurrence?.mode === 'floating'
-        ? { ...template, deferUntil: baseDate.add(1, 'day').format('YYYY-MM-DD') }
-        : skipTaskOccurrence(template, referenceDate)
+    const updatedTemplate = skipTaskOccurrence(template, referenceDate)
 
     try {
       setSyncMessage('Updating task…')
@@ -228,10 +185,7 @@ function App() {
     }
 
     const formatted = candidate.format('YYYY-MM-DD')
-    const updatedTemplate =
-      template.recurrence?.mode === 'floating'
-        ? { ...template, deferUntil: formatted }
-        : { ...template, nextDueDate: formatted }
+    const updatedTemplate = { ...template, nextDueDate: formatted }
 
     try {
       setSyncMessage('Rescheduling task…')

@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import { nanoid } from 'nanoid'
 import dayjs from '../utils/dates'
 
-const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
 const defaultTask = {
   id: '',
   title: '',
@@ -14,7 +12,7 @@ const defaultTask = {
   notesEnabled: true,
   autoSplit: true,
   maxChunkMinutes: 60,
-  recurrence: { mode: 'gap', gapDays: 2 },
+  recurrence: { mode: 'repeat', start_after_days: 0, end_before_days: 7 },
   nextDueDate: dayjs().format('YYYY-MM-DD'),
 }
 
@@ -32,13 +30,6 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
   const update = (patch) => setForm((prev) => ({ ...prev, ...patch }))
   const updateRecurrence = (patch) => update({ recurrence: { ...form.recurrence, ...patch } })
 
-  const toggleWeekday = (index) => {
-    const current = new Set(form.recurrence.days ?? [])
-    if (current.has(index)) current.delete(index)
-    else current.add(index)
-    updateRecurrence({ days: Array.from(current).sort((a, b) => a - b) })
-  }
-
   const handleSubmit = (event) => {
     event.preventDefault()
     const numericDuration = Number(form.duration) || 15
@@ -46,14 +37,6 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
       ...form,
       id: form.id || nanoid(),
       duration: numericDuration,
-      nextDueDate: form.recurrence?.mode === 'floating' ? null : form.nextDueDate || dayjs().format('YYYY-MM-DD'),
-    }
-    if (payload.recurrence?.mode === 'floating') {
-      payload.remainingDuration = form.remainingDuration ?? numericDuration
-      payload.deferUntil = form.deferUntil ?? null
-    } else {
-      delete payload.remainingDuration
-      delete payload.deferUntil
     }
     onSave(payload)
   }
@@ -80,12 +63,6 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
           Duration (minutes)
           <input type="number" min="5" max="240" value={form.duration} onChange={(event) => update({ duration: event.target.value })} />
         </label>
-        {form.recurrence?.mode !== 'floating' && (
-          <label>
-            Next due date
-            <input type="date" value={form.nextDueDate} onChange={(event) => update({ nextDueDate: event.target.value })} />
-          </label>
-        )}
         <label>
           Priority
           <select value={form.priority} onChange={(event) => update({ priority: event.target.value })}>
@@ -107,71 +84,53 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
           <input type="checkbox" checked={form.notesEnabled} onChange={(event) => update({ notesEnabled: event.target.checked })} />
           Enable completion notes
         </label>
-        <label>
-          Recurrence mode
-          <select value={form.recurrence?.mode ?? 'gap'} onChange={(event) => updateRecurrence({ mode: event.target.value })}>
-            <option value="gap">Every X days</option>
-            <option value="weekly">Weekly</option>
-            <option value="single">Single date</option>
-            <option value="floating">Floating (auto schedule)</option>
-          </select>
-        </label>
-        {form.recurrence?.mode === 'gap' && (
+        <fieldset className="field-group">
+          <legend>Recurrence</legend>
+          <div className="pill-row">
+            <label className={form.recurrence?.mode === 'repeat' ? 'chip chip--active' : 'chip'}>
+              <input
+                type="radio"
+                name="recurrence-mode"
+                value="repeat"
+                checked={form.recurrence?.mode === 'repeat'}
+                onChange={() => updateRecurrence({ mode: 'repeat' })}
+                style={{ display: 'none' }}
+              />
+              Repeat
+            </label>
+            <label className={form.recurrence?.mode === 'one_time' ? 'chip chip--active' : 'chip'}>
+              <input
+                type="radio"
+                name="recurrence-mode"
+                value="one_time"
+                checked={form.recurrence?.mode === 'one_time'}
+                onChange={() => updateRecurrence({ mode: 'one_time' })}
+                style={{ display: 'none' }}
+              />
+              One time
+            </label>
+          </div>
           <label>
-            Days between
+            Earliest in (days from today)
             <input
               type="number"
-              min="1"
-              max="30"
-              value={form.recurrence.gapDays ?? 1}
-              onChange={(event) => updateRecurrence({ gapDays: Number(event.target.value) || 1 })}
+              min="0"
+              value={form.recurrence?.start_after_days ?? 0}
+              onChange={(event) => updateRecurrence({ start_after_days: Math.max(0, Number(event.target.value) || 0) })}
             />
           </label>
-        )}
-        {form.recurrence?.mode === 'weekly' && (
-          <div className="field-group">
-            <span>Repeat on</span>
-            <div className="weekday-group">
-              {weekDays.map((day, index) => (
-                <button
-                  type="button"
-                  key={day}
-                  className={form.recurrence.days?.includes(index) ? 'chip chip--active' : 'chip'}
-                  onClick={() => toggleWeekday(index)}
-                >
-                  {day}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {form.recurrence?.mode === 'single' && (
           <label>
-            Occurs on
-            <input type="date" value={form.recurrence.date ?? form.nextDueDate} onChange={(event) => updateRecurrence({ date: event.target.value })} />
+            Latest by (days from today)
+            <input
+              type="number"
+              min={form.recurrence?.start_after_days ?? 0}
+              value={form.recurrence?.end_before_days ?? form.recurrence?.start_after_days ?? 0}
+              onChange={(event) =>
+                updateRecurrence({ end_before_days: Math.max(form.recurrence?.start_after_days ?? 0, Number(event.target.value) || 0) })
+              }
+            />
           </label>
-        )}
-        {form.recurrence?.mode === 'floating' && (
-          <>
-            <p className="muted">We will place this task automatically when there is space. If it is hefty, enable auto split.</p>
-            <label className="toggle">
-              <input type="checkbox" checked={form.autoSplit ?? true} onChange={(event) => update({ autoSplit: event.target.checked })} />
-              Allow splitting across days
-            </label>
-            {form.autoSplit && (
-              <label>
-                Max minutes per chunk
-                <input
-                  type="number"
-                  min="20"
-                  max="180"
-                  value={form.maxChunkMinutes ?? 60}
-                  onChange={(event) => update({ maxChunkMinutes: Number(event.target.value) || 60 })}
-                />
-              </label>
-            )}
-          </>
-        )}
+        </fieldset>
         <footer>
           <button type="submit" className="btn-primary">
             Save task

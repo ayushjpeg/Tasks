@@ -3,9 +3,10 @@ import dayjs from '../utils/dates'
 const formatRecurrence = (task) => {
   const { recurrence } = task
   if (!recurrence) return 'One-off'
-  if (recurrence.mode === 'gap') return `Every ${recurrence.gapDays ?? 1} day(s)`
-  if (recurrence.mode === 'weekly') return `Weekly on ${recurrence.days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}`
-  if (recurrence.mode === 'single') return `On ${dayjs(recurrence.date).format('MMM D')}`
+  const start = recurrence.start_after_days ?? 0
+  const end = recurrence.end_before_days ?? start
+  if (recurrence.mode === 'repeat') return `Repeat window: day ${start} to day ${end}`
+  if (recurrence.mode === 'one_time') return `One time between day ${start} and day ${end}`
   return 'Custom'
 }
 
