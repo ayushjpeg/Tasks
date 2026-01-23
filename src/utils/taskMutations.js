@@ -13,10 +13,14 @@ const nextWeeklyFrom = (task, fromDate) => {
   return iso(dayjs(fromDate).add(7, 'day'))
 }
 
-export const completeTask = (task, date, note) => {
+export const completeTask = (task, date, note, scheduledSlot = null) => {
   const done = dayjs(date)
-  // Do not auto-reschedule; AI will decide future placements. Clear current due date so it disappears from UI.
-  const nextDue = null
+  const slots = task.scheduledSlots || []
+  const remainingSlots = scheduledSlot
+    ? slots.filter((slot) => slot !== scheduledSlot)
+    : slots.filter((slot) => !dayjs(slot).isSame(done, 'day'))
+  const normalizedSlots = [...remainingSlots].sort((a, b) => (dayjs(a).isBefore(dayjs(b)) ? -1 : 1))
+  const nextDue = normalizedSlots.length ? dayjs(normalizedSlots[0]).format('YYYY-MM-DD') : null
 
   const notesLog = task.notesLog ?? []
   const noteEntry = note
@@ -31,14 +35,24 @@ export const completeTask = (task, date, note) => {
     ...task,
     lastCompletedAt: done.toISOString(),
     nextDueDate: nextDue,
+    scheduledSlots: normalizedSlots,
     notesLog: noteEntry ? [noteEntry, ...notesLog] : notesLog,
   }
 }
 
-export const skipTaskOccurrence = (task, date) => {
+export const skipTaskOccurrence = (task, date, scheduledSlot = null) => {
   const scheduledDate = dayjs(date)
-  // Do not auto-reschedule; clear due date so AI can re-place later.
-  return { ...task, nextDueDate: null, deferUntil: null }
+  const slots = task.scheduledSlots || []
+  const remainingSlots = scheduledSlot
+    ? slots.filter((slot) => slot !== scheduledSlot)
+    : slots.filter((slot) => !dayjs(slot).isSame(scheduledDate, 'day'))
+  const normalizedSlots = [...remainingSlots].sort((a, b) => (dayjs(a).isBefore(dayjs(b)) ? -1 : 1))
+  return {
+    ...task,
+    nextDueDate: normalizedSlots.length ? dayjs(normalizedSlots[0]).format('YYYY-MM-DD') : null,
+    scheduledSlots: normalizedSlots,
+    deferUntil: null,
+  }
 }
 
 export const updateTaskTemplate = (task, patch) => ({ ...task, ...patch })

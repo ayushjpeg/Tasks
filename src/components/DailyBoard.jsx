@@ -52,6 +52,7 @@ const DailyBoard = ({ day, onComplete, onSnooze, onReschedule }) => {
                 {task.priorityLabel}
               </span>
               {task.window && <span className="pill pill--soft">Window: {task.window}</span>}
+              {task.scheduledTime && <span className="pill pill--soft">Start {task.scheduledTime}</span>}
               {task.status === 'overdue' && <span className="pill pill--alert">Needs attention</span>}
               {isFloating && <span className="pill pill--soft">Floating chunk</span>}
             </div>

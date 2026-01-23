@@ -139,7 +139,7 @@ function App() {
 
     try {
       setSyncMessage('Logging completion…')
-      const updated = completeTask(template, completionDate, trimmedNote || undefined)
+      const updated = completeTask(template, completionDate, trimmedNote || undefined, card.scheduledSlot)
       const saved = await apiUpdateTask(updated)
       setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
       const historyEntry = await logTaskHistory(
@@ -163,7 +163,7 @@ function App() {
   const handleSnoozeTask = async (card, referenceDate) => {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
-    const updatedTemplate = skipTaskOccurrence(template, referenceDate)
+    const updatedTemplate = skipTaskOccurrence(template, referenceDate, card.scheduledSlot)
 
     try {
       setSyncMessage('Updating task…')
@@ -190,7 +190,21 @@ function App() {
     }
 
     const formatted = candidate.format('YYYY-MM-DD')
-    const updatedTemplate = { ...template, nextDueDate: formatted }
+    const existingSlots = template.scheduledSlots || []
+    const remainingSlots = card.scheduledSlot
+      ? existingSlots.filter((slot) => slot !== card.scheduledSlot)
+      : existingSlots.filter((slot) => !dayjs(slot).isSame(card.dueDate, 'day'))
+
+    const sourceSlot = card.scheduledSlot ? dayjs(card.scheduledSlot) : null
+    const nextSlot = sourceSlot
+      ? dayjs(formatted).hour(sourceSlot.hour()).minute(sourceSlot.minute()).second(0)
+      : dayjs(formatted).hour(9).minute(0).second(0)
+
+    const updatedTemplate = {
+      ...template,
+      nextDueDate: formatted,
+      scheduledSlots: [...remainingSlots, nextSlot.toISOString()].sort(),
+    }
 
     try {
       setSyncMessage('Rescheduling task…')
@@ -287,14 +301,46 @@ function App() {
       setSyncMessage('Calling AI…')
       const aiResponse = await generatePlan({ prompt: fullPrompt })
       setAiPlan(aiResponse)
+
+      let parsedPlan = []
+      try {
+        const json = JSON.parse(aiResponse)
+        if (Array.isArray(json)) {
+          parsedPlan = json
+        } else {
+          throw new Error('AI response is not an array')
+        }
+      } catch (err) {
+        console.error('Unable to parse AI response as JSON', err)
+        window.alert('AI did not return valid JSON. Please refine the prompt or retry.')
+        return
+      }
+
+      const normalizedPlan = parsedPlan
+        .map((entry) => ({
+          task_id: entry.task_id || entry.id,
+          scheduled_time: entry.scheduled_time || entry.time || null,
+          scheduled_date: entry.scheduled_date || entry.date,
+          last_completed_at: entry.last_completed_at || null,
+        }))
+        .filter((entry) => entry.task_id && entry.scheduled_date)
+
+      if (!normalizedPlan.length) {
+        window.alert('No valid schedule entries were found in the AI response.')
+        return
+      }
+
       setSyncMessage('Recording plan…')
       await scheduleCommit({
         weekStart: preview.week_start,
         weekEnd: preview.week_end,
-        plan: preview.tasks,
+        plan: normalizedPlan,
         aiResponse,
       })
-      window.alert('AI weekly plan ready. Check console for details.')
+
+      const refreshedTasks = await fetchTasks()
+      setTasks(refreshedTasks)
+      window.alert('AI weekly plan recorded. Calendar refreshed.')
       console.info('AI plan prompt:', fullPrompt)
       console.info('AI plan response:', aiResponse)
     } catch (error) {

@@ -60,6 +60,7 @@ const fromApiTask = (payload) => {
     priority: payload.priority || 'medium',
     recurrence: fromApiRecurrence(payload.recurrence),
     nextDueDate: metadata.nextDueDate ?? null,
+    scheduledSlots: metadata.scheduled_slots || [],
     window: metadata.window || 'any',
     allowDuringWork: Boolean(metadata.allowDuringWork),
     allowSplit: Boolean(metadata.allowSplit),
@@ -84,6 +85,7 @@ const toApiTaskPayload = (task) => ({
   recurrence: toApiRecurrence(task.recurrence),
   metadata_json: cleanObject({
     nextDueDate: task.nextDueDate ?? null,
+    scheduled_slots: task.scheduledSlots !== undefined ? task.scheduledSlots : undefined,
     window: task.window ?? 'any',
     allowDuringWork: Boolean(task.allowDuringWork),
     allowSplit: Boolean(task.allowSplit),

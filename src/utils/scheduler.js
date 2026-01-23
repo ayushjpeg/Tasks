@@ -24,16 +24,18 @@ const buildTaskCard = (task, date, overrides = {}) => {
     priorityLabel: overrides.priorityLabel ?? labelForPriority[task.priority] ?? 'Task',
     autop: task.autop,
     status,
-    type: overrides.type ?? 'due',
+    type: overrides.type ?? (overrides.scheduledSlot ? 'scheduled' : 'due'),
     part: overrides.part ?? null,
-    dueDate: task.nextDueDate ?? date,
+    dueDate: overrides.dueDate ?? task.nextDueDate ?? date,
+    scheduledSlot: overrides.scheduledSlot ?? null,
+    scheduledTime: overrides.scheduledTime ?? null,
     window: task.window ?? 'any',
     notesEnabled: task.notesEnabled,
   }
 }
 
 const sortDayTasks = (tasks) => {
-  const statusOrder = { overdue: 1, floating: 2, due: 3 }
+  const statusOrder = { overdue: 1, scheduled: 2, floating: 3, due: 4 }
   return tasks.sort((a, b) => {
     const priorityDiff = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3)
     if (priorityDiff !== 0) return priorityDiff
@@ -107,18 +109,37 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
   const plannerDays = Array.from({ length: days }, (_, index) => {
     const date = start.add(index, 'day')
     const iso = date.format('YYYY-MM-DD')
+    const scheduledCards = []
+
+    tasks.forEach((task) => {
+      const slots = (task.scheduledSlots || []).map((value) => dayjs(value))
+      const todaysSlots = slots.filter((slot) => slot.isSame(iso, 'day'))
+      todaysSlots.forEach((slot, slotIndex) => {
+        const card = buildTaskCard(task, iso, {
+          status: 'due',
+          type: 'scheduled',
+          dueDate: iso,
+          scheduledSlot: slot.toISOString(),
+          scheduledTime: slot.format('HH:mm'),
+          part: todaysSlots.length > 1 ? `Slot ${slotIndex + 1}` : null,
+          priorityLabel: 'Scheduled by AI',
+        })
+        scheduledCards.push(card)
+      })
+    })
+
     const dueToday = tasks
-      .filter((task) => task.nextDueDate)
+      .filter((task) => !task.scheduledSlots?.length && task.nextDueDate)
       .filter((task) => dayjs(task.nextDueDate).isSame(iso, 'day'))
       .map((task) => buildTaskCard(task, iso))
 
-    const totalMinutes = dueToday.reduce((sum, task) => sum + task.duration, 0)
+    const totalMinutes = [...scheduledCards, ...dueToday].reduce((sum, task) => sum + task.duration, 0)
 
     return {
       date: iso,
       label: date.format('dddd, MMM D'),
       shortLabel: date.format('ddd DD'),
-      tasks: dueToday,
+      tasks: [...scheduledCards, ...dueToday],
       totalMinutes,
     }
   })
@@ -128,9 +149,24 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
     .filter((task) => dayjs(task.nextDueDate).isBefore(start, 'day'))
     .map((task) => buildTaskCard(task, startIso, { status: 'overdue' }))
 
+  const overdueSlots = tasks
+    .flatMap((task) => (task.scheduledSlots || []).map((slot) => ({ task, slot: dayjs(slot) })))
+    .filter(({ slot }) => slot.isBefore(start, 'day'))
+    .map(({ task, slot }) =>
+      buildTaskCard(task, startIso, {
+        status: 'overdue',
+        type: 'scheduled',
+        dueDate: slot.format('YYYY-MM-DD'),
+        scheduledSlot: slot.toISOString(),
+        scheduledTime: slot.format('HH:mm'),
+        priorityLabel: 'Scheduled by AI',
+      }),
+    )
+
   if (plannerDays[0]) {
-    plannerDays[0].tasks = [...overdue, ...plannerDays[0].tasks]
-    plannerDays[0].totalMinutes += overdue.reduce((sum, task) => sum + task.duration, 0)
+    const overdueAll = [...overdue, ...overdueSlots]
+    plannerDays[0].tasks = [...overdueAll, ...plannerDays[0].tasks]
+    plannerDays[0].totalMinutes += overdueAll.reduce((sum, task) => sum + task.duration, 0)
   }
 
   const floating = tasks.filter((task) => task.recurrence?.mode === 'floating')
