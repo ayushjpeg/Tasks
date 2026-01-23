@@ -15,21 +15,8 @@ const nextWeeklyFrom = (task, fromDate) => {
 
 export const completeTask = (task, date, note) => {
   const done = dayjs(date)
-  let nextDue = task.nextDueDate
-
-  if (task.recurrence?.mode === 'repeat') {
-    const startAfter = task.recurrence.start_after_days ?? 0
-    nextDue = iso(done.add(Math.max(1, startAfter || 1), 'day'))
-  } else if (task.recurrence?.mode === 'one_time') {
-    nextDue = null
-  } else if (task.recurrence?.mode === 'gap') {
-    const gap = task.recurrence.gapDays ?? 1
-    nextDue = iso(done.add(gap, 'day'))
-  } else if (task.recurrence?.mode === 'weekly') {
-    nextDue = nextWeeklyFrom(task, done)
-  } else if (task.recurrence?.mode === 'single') {
-    nextDue = null
-  }
+  // Do not auto-reschedule; AI will decide future placements. Clear current due date so it disappears from UI.
+  const nextDue = null
 
   const notesLog = task.notesLog ?? []
   const noteEntry = note
@@ -50,23 +37,8 @@ export const completeTask = (task, date, note) => {
 
 export const skipTaskOccurrence = (task, date) => {
   const scheduledDate = dayjs(date)
-  if (task.recurrence?.mode === 'repeat') {
-    const startAfter = task.recurrence.start_after_days ?? 0
-    return { ...task, nextDueDate: iso(scheduledDate.add(Math.max(1, startAfter || 1), 'day')) }
-  }
-  if (task.recurrence?.mode === 'one_time') {
-    return { ...task, nextDueDate: null }
-  }
-  if (task.recurrence?.mode === 'gap') {
-    return { ...task, nextDueDate: iso(scheduledDate.add(1, 'day')) }
-  }
-  if (task.recurrence?.mode === 'weekly') {
-    return { ...task, nextDueDate: nextWeeklyFrom(task, scheduledDate) }
-  }
-  if (task.recurrence?.mode === 'floating') {
-    return { ...task, deferUntil: iso(scheduledDate.add(1, 'day')) }
-  }
-  return task
+  // Do not auto-reschedule; clear due date so AI can re-place later.
+  return { ...task, nextDueDate: null, deferUntil: null }
 }
 
 export const updateTaskTemplate = (task, patch) => ({ ...task, ...patch })
