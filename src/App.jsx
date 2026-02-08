@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from './utils/dates'
 import { buildPlanner } from './utils/scheduler'
 import { completeTask, skipTaskOccurrence } from './utils/taskMutations'
@@ -38,6 +38,16 @@ const plansEqual = (a, b) => {
   })
 }
 
+const buildPlanPayload = (planned = {}) =>
+  Object.entries(planned).flatMap(([date, taskIds]) =>
+    (taskIds || []).map((taskId) => ({
+      task_id: taskId,
+      scheduled_date: date,
+      scheduled_time: null,
+      last_completed_at: null,
+    })),
+  )
+
 function App() {
   const [tasks, setTasks] = useState([])
   const [history, setHistory] = useState([])
@@ -50,7 +60,16 @@ function App() {
   const [loadError, setLoadError] = useState('')
   const [planWeekStart, setPlanWeekStart] = useState(dayjs().startOf('week'))
   const [planned, setPlanned] = useState({})
+  const [planStatus, setPlanStatus] = useState('')
   const planWeekEnd = useMemo(() => planWeekStart.add(6, 'day'), [planWeekStart])
+  const skipNextPlanCommit = useRef(false)
+  const planSaveInFlight = useRef(false)
+  const planSaveQueued = useRef(false)
+  const latestPlanRef = useRef(planned)
+  useEffect(() => {
+    // Avoid committing immediately on first render
+    skipNextPlanCommit.current = true
+  }, [])
 
   useEffect(() => {
     let canceled = false
@@ -95,8 +114,67 @@ function App() {
       })
     })
 
-    setPlanned((prev) => (plansEqual(prev, nextPlan) ? prev : nextPlan))
+    setPlanned((prev) => {
+      if (plansEqual(prev, nextPlan)) return prev
+      skipNextPlanCommit.current = true
+      setPlanStatus('Synced from saved plan')
+      return nextPlan
+    })
   }, [tasks, planWeekStart, planWeekEnd])
+
+  const commitPlan = useCallback(
+    async (planMap) => {
+      planSaveInFlight.current = true
+      setPlanStatus('Saving…')
+      try {
+        const planPayload = buildPlanPayload(planMap)
+        await scheduleCommit({
+          weekStart: planWeekStart.format('YYYY-MM-DD'),
+          weekEnd: planWeekEnd.format('YYYY-MM-DD'),
+          plan: planPayload,
+        })
+        const refreshedTasks = await fetchTasks()
+        setTasks(refreshedTasks)
+        setPlanStatus('Saved')
+      } catch (error) {
+        console.error('Failed to save plan', error)
+        setPlanStatus('Save failed')
+        window.alert('Unable to save the plan right now.')
+      } finally {
+        planSaveInFlight.current = false
+        if (planSaveQueued.current) {
+          planSaveQueued.current = false
+          await commitPlan(latestPlanRef.current)
+        }
+      }
+    },
+    [planWeekEnd, planWeekStart],
+  )
+
+  const requestPlanSave = useCallback(async () => {
+    if (skipNextPlanCommit.current) {
+      skipNextPlanCommit.current = false
+      return
+    }
+
+    if (planSaveInFlight.current) {
+      planSaveQueued.current = true
+      return
+    }
+
+    await commitPlan(latestPlanRef.current)
+    while (planSaveQueued.current) {
+      planSaveQueued.current = false
+      await commitPlan(latestPlanRef.current)
+    }
+  }, [commitPlan])
+
+  useEffect(() => {
+    latestPlanRef.current = planned
+    requestPlanSave()
+  }, [planned, requestPlanSave])
+
+  const taskAlreadyPlanned = useCallback((planMap, taskId) => Object.values(planMap || {}).some((list) => list.includes(taskId)), [])
 
   const weekStart = dayjs(activeDate).startOf('week')
   const weekKey = weekStart.format('YYYY-MM-DD')
@@ -249,39 +327,43 @@ function App() {
       return <WeeklyBoard days={planner.days} activeDate={activeDate} onSelectDay={setActiveDate} />
     }
     if (view === 'plan') {
-      const handleCommitPlan = async () => {
-        try {
-          setSyncMessage('Saving plan…')
-          const planPayload = Object.entries(planned).flatMap(([date, taskIds]) =>
-            (taskIds || []).map((taskId) => ({
-              task_id: taskId,
-              scheduled_date: date,
-              scheduled_time: null,
-              last_completed_at: null,
-            })),
-          )
-
-          if (!planPayload.length) {
-            window.alert('Add at least one task to the plan before saving.')
-            return
-          }
-
-          await scheduleCommit({
-            weekStart: planWeekStart.format('YYYY-MM-DD'),
-            weekEnd: planWeekEnd.format('YYYY-MM-DD'),
-            plan: planPayload,
-          })
-
-          const refreshedTasks = await fetchTasks()
-          setTasks(refreshedTasks)
-          window.alert('Plan saved and synced.')
-        } catch (error) {
-          console.error('Failed to save plan', error)
-          window.alert('Unable to save the plan right now.')
-        } finally {
-          setSyncMessage('')
-        }
+      const addToPlan = (taskId, date) => {
+        if (!taskId) return
+        setPlanned((prev) => {
+          if (taskAlreadyPlanned(prev, taskId)) return prev
+          const list = prev[date] ? [...prev[date], taskId] : [taskId]
+          return { ...prev, [date]: list }
+        })
       }
+
+      const removeFromPlan = (date, index) => {
+        setPlanned((prev) => {
+          const list = prev[date] ? [...prev[date]] : []
+          if (index < 0 || index >= list.length) return prev
+          list.splice(index, 1)
+          const next = { ...prev }
+          if (list.length) {
+            next[date] = list
+          } else {
+            delete next[date]
+          }
+          return next
+        })
+      }
+
+      const moveInPlan = (date, index, delta) => {
+        setPlanned((prev) => {
+          const list = prev[date] ? [...prev[date]] : []
+          const target = index + delta
+          if (target < 0 || target >= list.length) return prev
+          const next = [...list]
+          const [item] = next.splice(index, 1)
+          next.splice(target, 0, item)
+          return { ...prev, [date]: next }
+        })
+      }
+
+      const clearPlan = () => setPlanned({})
 
       return (
         <PlanBoard
@@ -289,33 +371,12 @@ function App() {
           history={history}
           weekStart={planWeekStart}
           planned={planned}
-          onAdd={(taskId, date) => {
-            setPlanned((prev) => {
-              const list = prev[date] ? [...prev[date], taskId] : [taskId]
-              return { ...prev, [date]: list }
-            })
-          }}
-          onRemove={(date, index) => {
-            setPlanned((prev) => {
-              const list = prev[date] ? [...prev[date]] : []
-              list.splice(index, 1)
-              return { ...prev, [date]: list }
-            })
-          }}
-          onMove={(date, index, delta) => {
-            setPlanned((prev) => {
-              const list = prev[date] ? [...prev[date]] : []
-              const target = index + delta
-              if (target < 0 || target >= list.length) return prev
-              const next = [...list]
-              const [item] = next.splice(index, 1)
-              next.splice(target, 0, item)
-              return { ...prev, [date]: next }
-            })
-          }}
+          onAdd={addToPlan}
+          onRemove={removeFromPlan}
+          onMove={moveInPlan}
           onWeekChange={(nextStart) => setPlanWeekStart(dayjs(nextStart).startOf('week'))}
-          onCommit={handleCommitPlan}
-          onClear={() => setPlanned({})}
+          onClear={clearPlan}
+          planStatus={planStatus}
         />
       )
     }

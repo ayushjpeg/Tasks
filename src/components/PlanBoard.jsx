@@ -3,9 +3,11 @@ import { buildRecommendations } from '../utils/recommendations'
 
 const statusColor = (status) => (status === 'late' ? '#ff9f1c' : '#7fdcff')
 
-const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove, onWeekChange, onCommit, onClear }) => {
+const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove, onWeekChange, onClear, planStatus }) => {
   const weekLabel = `${dayjs(weekStart).format('MMM D')} – ${dayjs(weekStart).add(6, 'day').format('MMM D')}`
   const recommendations = buildRecommendations({ tasks, history, weekStart, plannedSlots: planned })
+
+  const plannedIds = new Set(Object.values(planned || {}).flat())
 
   const orderedTasksForDay = (date) => planned[date] || []
 
@@ -20,6 +22,7 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
         <div>
           <p className="eyebrow">Plan week</p>
           <h2>{weekLabel}</h2>
+          {planStatus && <p className="muted" style={{ marginTop: '4px' }}>{planStatus}</p>}
         </div>
         <div className="quick-actions" style={{ gap: '0.5rem' }}>
           <button className="btn-secondary" onClick={() => onWeekChange(dayjs(weekStart).subtract(7, 'day'))}>
@@ -30,9 +33,6 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
           </button>
           <button className="btn-ghost" onClick={() => onWeekChange(dayjs().startOf('week'))}>
             This week
-          </button>
-          <button className="btn-primary" onClick={onCommit}>
-            Save plan
           </button>
           <button className="btn-secondary" onClick={onClear}>
             Clear
@@ -61,8 +61,8 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
                       <p className="muted">{rec.duration} min • window {rec.windowStart} → {rec.windowEnd}</p>
                       {rec.status === 'late' && <span className="pill pill--alert">Outside window</span>}
                     </div>
-                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)}>
-                      Add
+                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)} disabled={plannedIds.has(rec.taskId)}>
+                      {plannedIds.has(rec.taskId) ? 'Added' : 'Add'}
                     </button>
                   </div>
                 ))}
@@ -112,8 +112,8 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
                   Choose task
                 </option>
                 {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.title} ({task.duration} min)
+                  <option key={task.id} value={task.id} disabled={plannedIds.has(task.id)}>
+                    {task.title} ({task.duration} min){plannedIds.has(task.id) ? ' • already planned' : ''}
                   </option>
                 ))}
               </select>

@@ -28,6 +28,8 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
   const days = Array.from({ length: 7 }, (_, i) => start.add(i, 'day'))
   const lastCompleted = getLastCompletedMap(history)
 
+  const plannedIds = new Set(Object.values(plannedSlots || {}).flat())
+
   // Track earliest planned date per task to avoid recommending again after scheduled.
   const earliestPlanned = {}
   Object.entries(plannedSlots).forEach(([date, items]) => {
@@ -45,9 +47,11 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
     const recommended = []
 
     tasks.forEach((task) => {
+      if (plannedIds.has(task.id)) return
+
       // Skip if already planned earlier in the week.
       const plannedDay = earliestPlanned[task.id]
-      if (plannedDay && plannedDay.isBefore(day, 'day')) return
+      if (plannedDay && !plannedDay.isAfter(day, 'day')) return
 
       const lastDone = lastCompleted[task.id]
       const { windowStart, windowEnd } = getRecurrenceWindow(task, lastDone)
