@@ -167,30 +167,15 @@ export const schedulePreview = async (weekStart, weekEnd) => {
   return data
 }
 
-export const scheduleCommit = async ({ weekStart, weekEnd, plan, aiResponse }) => {
+export const scheduleCommit = async ({ weekStart, weekEnd, plan }) => {
   const payload = {
     week_start: weekStart,
     week_end: weekEnd,
     plan,
-    ai_response: aiResponse || null,
   }
   const data = await request('/tasks/schedule/commit', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
   return data
-}
-
-export const fetchPrompt = async () => {
-  const data = await request('/tasks/prompt')
-  return data?.prompt || ''
-}
-
-export const savePrompt = async (prompt) => {
-  const payload = { prompt }
-  const data = await request('/tasks/prompt', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  })
-  return data?.prompt || ''
 }

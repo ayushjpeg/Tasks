@@ -122,7 +122,7 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
           scheduledSlot: slot.toISOString(),
           scheduledTime: slot.format('HH:mm'),
           part: todaysSlots.length > 1 ? `Slot ${slotIndex + 1}` : null,
-          priorityLabel: 'Scheduled by AI',
+          priorityLabel: 'Scheduled slot',
         })
         scheduledCards.push(card)
       })
@@ -159,7 +159,7 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
         dueDate: slot.format('YYYY-MM-DD'),
         scheduledSlot: slot.toISOString(),
         scheduledTime: slot.format('HH:mm'),
-        priorityLabel: 'Scheduled by AI',
+        priorityLabel: 'Scheduled slot',
       }),
     )
 

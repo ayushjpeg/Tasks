@@ -130,7 +130,7 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
               }
             />
           </label>
-          <p className="muted">AI will schedule within this day-range window based on last completion.</p>
+          <p className="muted">Use this window as guidance when you place the task in your weekly plan.</p>
         </fieldset>
         <footer>
           <button type="submit" className="btn-primary">
