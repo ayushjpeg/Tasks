@@ -7,21 +7,36 @@ import WeeklyBoard from './components/WeeklyBoard'
 import TaskLibrary from './components/TaskLibrary'
 import HistoryView from './components/HistoryView'
 import TaskModal from './components/TaskModal'
+import PlanBoard from './components/PlanBoard'
 import {
   createTask as apiCreateTask,
   deleteTask as apiDeleteTask,
   fetchTaskHistory,
   fetchTasks,
   logTaskHistory,
+  scheduleCommit,
   updateTask as apiUpdateTask,
 } from './api/tasksApi'
 
 const tabs = [
   { id: 'daily', label: 'Daily' },
   { id: 'weekly', label: 'Weekly' },
+  { id: 'plan', label: 'Plan' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'history', label: 'History' },
 ]
+
+const plansEqual = (a, b) => {
+  const aKeys = Object.keys(a || {})
+  const bKeys = Object.keys(b || {})
+  if (aKeys.length !== bKeys.length) return false
+  return aKeys.every((key) => {
+    const aList = a[key] || []
+    const bList = b[key] || []
+    if (aList.length !== bList.length) return false
+    return aList.every((value, idx) => value === bList[idx])
+  })
+}
 
 function App() {
   const [tasks, setTasks] = useState([])
@@ -33,6 +48,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [syncMessage, setSyncMessage] = useState('')
   const [loadError, setLoadError] = useState('')
+  const [planWeekStart, setPlanWeekStart] = useState(dayjs().startOf('week'))
+  const [planned, setPlanned] = useState({})
+  const planWeekEnd = useMemo(() => planWeekStart.add(6, 'day'), [planWeekStart])
 
   useEffect(() => {
     let canceled = false
@@ -61,6 +79,24 @@ function App() {
       canceled = true
     }
   }, [])
+
+  useEffect(() => {
+    const start = planWeekStart.startOf('day')
+    const end = planWeekEnd.endOf('day')
+    const nextPlan = {}
+
+    tasks.forEach((task) => {
+      (task.scheduledSlots || []).forEach((slotIso) => {
+        const slot = dayjs(slotIso)
+        if (!slot.isValid()) return
+        if (slot.isBefore(start, 'day') || slot.isAfter(end, 'day')) return
+        const dayKey = slot.format('YYYY-MM-DD')
+        nextPlan[dayKey] = [...(nextPlan[dayKey] || []), task.id]
+      })
+    })
+
+    setPlanned((prev) => (plansEqual(prev, nextPlan) ? prev : nextPlan))
+  }, [tasks, planWeekStart, planWeekEnd])
 
   const weekStart = dayjs(activeDate).startOf('week')
   const weekKey = weekStart.format('YYYY-MM-DD')
@@ -211,6 +247,77 @@ function App() {
   const renderView = () => {
     if (view === 'weekly') {
       return <WeeklyBoard days={planner.days} activeDate={activeDate} onSelectDay={setActiveDate} />
+    }
+    if (view === 'plan') {
+      const handleCommitPlan = async () => {
+        try {
+          setSyncMessage('Saving plan…')
+          const planPayload = Object.entries(planned).flatMap(([date, taskIds]) =>
+            (taskIds || []).map((taskId) => ({
+              task_id: taskId,
+              scheduled_date: date,
+              scheduled_time: null,
+              last_completed_at: null,
+            })),
+          )
+
+          if (!planPayload.length) {
+            window.alert('Add at least one task to the plan before saving.')
+            return
+          }
+
+          await scheduleCommit({
+            weekStart: planWeekStart.format('YYYY-MM-DD'),
+            weekEnd: planWeekEnd.format('YYYY-MM-DD'),
+            plan: planPayload,
+          })
+
+          const refreshedTasks = await fetchTasks()
+          setTasks(refreshedTasks)
+          window.alert('Plan saved and synced.')
+        } catch (error) {
+          console.error('Failed to save plan', error)
+          window.alert('Unable to save the plan right now.')
+        } finally {
+          setSyncMessage('')
+        }
+      }
+
+      return (
+        <PlanBoard
+          tasks={tasks}
+          history={history}
+          weekStart={planWeekStart}
+          planned={planned}
+          onAdd={(taskId, date) => {
+            setPlanned((prev) => {
+              const list = prev[date] ? [...prev[date], taskId] : [taskId]
+              return { ...prev, [date]: list }
+            })
+          }}
+          onRemove={(date, index) => {
+            setPlanned((prev) => {
+              const list = prev[date] ? [...prev[date]] : []
+              list.splice(index, 1)
+              return { ...prev, [date]: list }
+            })
+          }}
+          onMove={(date, index, delta) => {
+            setPlanned((prev) => {
+              const list = prev[date] ? [...prev[date]] : []
+              const target = index + delta
+              if (target < 0 || target >= list.length) return prev
+              const next = [...list]
+              const [item] = next.splice(index, 1)
+              next.splice(target, 0, item)
+              return { ...prev, [date]: next }
+            })
+          }}
+          onWeekChange={(nextStart) => setPlanWeekStart(dayjs(nextStart).startOf('week'))}
+          onCommit={handleCommitPlan}
+          onClear={() => setPlanned({})}
+        />
+      )
     }
     if (view === 'tasks') {
       return <TaskLibrary tasks={tasks} onCreate={() => openTaskModal(null)} onEdit={openTaskModal} onDelete={handleDeleteTask} />

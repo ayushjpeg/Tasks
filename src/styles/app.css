@@ -98,6 +98,55 @@ textarea {
   align-items: center;
 }
 
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.plan-column {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plan-column__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.plan-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0e1424;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 4px solid var(--border);
+}
+
+.plan-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .quick-stats article {
   position: relative;
   min-width: 120px;
