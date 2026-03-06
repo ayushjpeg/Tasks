@@ -7,8 +7,6 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
   const weekLabel = `${dayjs(weekStart).format('MMM D')} – ${dayjs(weekStart).add(6, 'day').format('MMM D')}`
   const recommendations = buildRecommendations({ tasks, history, weekStart, plannedSlots: planned })
 
-  const plannedIds = new Set(Object.values(planned || {}).flat())
-
   const orderedTasksForDay = (date) => planned[date] || []
 
   const handleAdd = (taskId, date) => {
@@ -45,7 +43,8 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
 
       <div className="plan-grid">
         {recommendations.map((day) => {
-          const visibleRecommended = day.recommended.filter((rec) => !plannedIds.has(rec.taskId))
+          const plannedIdsForDay = new Set(orderedTasksForDay(day.date))
+          const visibleRecommended = day.recommended
 
           return <article key={day.date} className="plan-column">
             <header className="plan-column__header">
@@ -66,8 +65,8 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
                       <p className="muted">{rec.duration} min • window {rec.windowStart} → {rec.windowEnd}</p>
                       {rec.status === 'late' && <span className="pill pill--alert">Outside window</span>}
                     </div>
-                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)}>
-                      Add
+                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)} disabled={plannedIdsForDay.has(rec.taskId)}>
+                      {plannedIdsForDay.has(rec.taskId) ? 'Added today' : 'Add'}
                     </button>
                   </div>
                 ))}
@@ -117,8 +116,8 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
                   Choose task
                 </option>
                 {tasks.map((task) => (
-                  <option key={task.id} value={task.id} disabled={plannedIds.has(task.id)}>
-                    {task.title} ({task.duration} min){plannedIds.has(task.id) ? ' • already planned' : ''}
+                  <option key={task.id} value={task.id} disabled={plannedIdsForDay.has(task.id)}>
+                    {task.title} ({task.duration} min){plannedIdsForDay.has(task.id) ? ' • already added today' : ''}
                   </option>
                 ))}
               </select>

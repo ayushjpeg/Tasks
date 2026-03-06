@@ -176,8 +176,6 @@ function App() {
     requestPlanSave()
   }, [planned, requestPlanSave])
 
-  const taskAlreadyPlanned = useCallback((planMap, taskId) => Object.values(planMap || {}).some((list) => list.includes(taskId)), [])
-
   const weekStart = dayjs(activeDate).startOf('week')
   const weekKey = weekStart.format('YYYY-MM-DD')
   const planner = useMemo(() => buildPlanner({ tasks, history, startDate: weekStart, days: 7 }), [tasks, history, weekKey])
@@ -339,8 +337,9 @@ function App() {
       const addToPlan = (taskId, date) => {
         if (!taskId) return
         setPlanned((prev) => {
-          if (taskAlreadyPlanned(prev, taskId)) return prev
-          const list = prev[date] ? [...prev[date], taskId] : [taskId]
+          const current = prev[date] ? [...prev[date]] : []
+          if (current.includes(taskId)) return prev
+          const list = [...current, taskId]
           return { ...prev, [date]: list }
         })
       }
