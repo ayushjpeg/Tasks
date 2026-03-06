@@ -297,8 +297,15 @@ function App() {
 
     const formatted = candidate.format('YYYY-MM-DD')
     const existingSlots = template.scheduledSlots || []
+    const sameSlot = (a, b) => {
+      if (!a || !b) return false
+      if (a === b) return true
+      const da = dayjs(a)
+      const db = dayjs(b)
+      return da.isValid() && db.isValid() ? da.isSame(db) : false
+    }
     const remainingSlots = card.scheduledSlot
-      ? existingSlots.filter((slot) => slot !== card.scheduledSlot)
+      ? existingSlots.filter((slot) => !sameSlot(slot, card.scheduledSlot))
       : existingSlots.filter((slot) => !dayjs(slot).isSame(card.dueDate, 'day'))
 
     const sourceSlot = card.scheduledSlot ? dayjs(card.scheduledSlot) : null

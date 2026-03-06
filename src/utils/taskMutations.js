@@ -3,6 +3,15 @@ import dayjs from './dates'
 
 const iso = (value) => dayjs(value).format('YYYY-MM-DD')
 
+const sameSlot = (a, b) => {
+  if (!a || !b) return false
+  if (a === b) return true
+  const da = dayjs(a)
+  const db = dayjs(b)
+  if (!da.isValid() || !db.isValid()) return false
+  return da.isSame(db)
+}
+
 const nextWeeklyFrom = (task, fromDate) => {
   const days = task.recurrence.days ?? []
   if (!days.length) return null
@@ -17,7 +26,7 @@ export const completeTask = (task, date, note, scheduledSlot = null) => {
   const done = dayjs(date)
   const slots = task.scheduledSlots || []
   const remainingSlots = scheduledSlot
-    ? slots.filter((slot) => slot !== scheduledSlot)
+    ? slots.filter((slot) => !sameSlot(slot, scheduledSlot))
     : slots.filter((slot) => !dayjs(slot).isSame(done, 'day'))
   const normalizedSlots = [...remainingSlots].sort((a, b) => (dayjs(a).isBefore(dayjs(b)) ? -1 : 1))
   const nextDue = normalizedSlots.length ? dayjs(normalizedSlots[0]).format('YYYY-MM-DD') : null
@@ -44,7 +53,7 @@ export const skipTaskOccurrence = (task, date, scheduledSlot = null) => {
   const scheduledDate = dayjs(date)
   const slots = task.scheduledSlots || []
   const remainingSlots = scheduledSlot
-    ? slots.filter((slot) => slot !== scheduledSlot)
+    ? slots.filter((slot) => !sameSlot(slot, scheduledSlot))
     : slots.filter((slot) => !dayjs(slot).isSame(scheduledDate, 'day'))
   const normalizedSlots = [...remainingSlots].sort((a, b) => (dayjs(a).isBefore(dayjs(b)) ? -1 : 1))
   return {

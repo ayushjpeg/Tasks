@@ -112,15 +112,17 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
     const scheduledCards = []
 
     tasks.forEach((task) => {
-      const slots = (task.scheduledSlots || []).map((value) => dayjs(value))
-      const todaysSlots = slots.filter((slot) => slot.isSame(iso, 'day'))
+      const slots = (task.scheduledSlots || [])
+        .map((value) => ({ raw: value, parsed: dayjs(value) }))
+        .filter((slot) => slot.parsed.isValid())
+      const todaysSlots = slots.filter((slot) => slot.parsed.isSame(iso, 'day'))
       todaysSlots.forEach((slot, slotIndex) => {
         const card = buildTaskCard(task, iso, {
           status: 'due',
           type: 'scheduled',
           dueDate: iso,
-          scheduledSlot: slot.toISOString(),
-          scheduledTime: slot.format('HH:mm'),
+          scheduledSlot: slot.raw,
+          scheduledTime: slot.parsed.format('HH:mm'),
           part: todaysSlots.length > 1 ? `Slot ${slotIndex + 1}` : null,
           priorityLabel: 'Scheduled slot',
         })
@@ -150,14 +152,18 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
     .map((task) => buildTaskCard(task, startIso, { status: 'overdue' }))
 
   const overdueSlots = tasks
-    .flatMap((task) => (task.scheduledSlots || []).map((slot) => ({ task, slot: dayjs(slot) })))
+    .flatMap((task) =>
+      (task.scheduledSlots || [])
+        .map((slot) => ({ task, slotRaw: slot, slot: dayjs(slot) }))
+        .filter(({ slot }) => slot.isValid()),
+    )
     .filter(({ slot }) => slot.isBefore(start, 'day'))
-    .map(({ task, slot }) =>
+    .map(({ task, slot, slotRaw }) =>
       buildTaskCard(task, startIso, {
         status: 'overdue',
         type: 'scheduled',
         dueDate: slot.format('YYYY-MM-DD'),
-        scheduledSlot: slot.toISOString(),
+        scheduledSlot: slotRaw,
         scheduledTime: slot.format('HH:mm'),
         priorityLabel: 'Scheduled slot',
       }),
