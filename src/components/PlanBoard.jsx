@@ -44,7 +44,7 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
       <div className="plan-grid">
         {recommendations.map((day) => {
           const plannedIdsForDay = new Set(orderedTasksForDay(day.date))
-          const visibleRecommended = day.recommended
+          const visibleRecommended = day.recommended.filter((rec) => !plannedIdsForDay.has(rec.taskId))
 
           return <article key={day.date} className="plan-column">
             <header className="plan-column__header">
@@ -65,8 +65,8 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
                       <p className="muted">{rec.duration} min • window {rec.windowStart} → {rec.windowEnd}</p>
                       {rec.status === 'late' && <span className="pill pill--alert">Outside window</span>}
                     </div>
-                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)} disabled={plannedIdsForDay.has(rec.taskId)}>
-                      {plannedIdsForDay.has(rec.taskId) ? 'Added today' : 'Add'}
+                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)}>
+                      Add
                     </button>
                   </div>
                 ))}
