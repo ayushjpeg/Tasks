@@ -50,6 +50,12 @@ const buildPlanPayload = (planned = {}) =>
     })),
   )
 
+const isWithinWeek = (dateValue, weekStart, weekEnd) => {
+  const parsed = dayjs(dateValue)
+  if (!parsed.isValid()) return false
+  return !parsed.isBefore(weekStart, 'day') && !parsed.isAfter(weekEnd, 'day')
+}
+
 function App() {
   const [tasks, setTasks] = useState([])
   const [history, setHistory] = useState([])
@@ -124,6 +130,11 @@ function App() {
     })
   }, [tasks, planWeekStart, planWeekEnd])
 
+  useEffect(() => {
+    // Navigating weeks should never auto-commit stale plan state from the previous week.
+    skipNextPlanCommit.current = true
+  }, [planWeekStart, planWeekEnd])
+
   const commitPlan = useCallback(
     async (planMap) => {
       planSaveInFlight.current = true
@@ -157,6 +168,18 @@ function App() {
     if (skipNextPlanCommit.current) {
       skipNextPlanCommit.current = false
       return
+    }
+
+    const draftPlan = latestPlanRef.current || {}
+    const planDates = Object.keys(draftPlan)
+    if (planDates.length) {
+      const hasInsideCurrentWeek = planDates.some((dateKey) => isWithinWeek(dateKey, planWeekStart, planWeekEnd))
+      const hasOutsideCurrentWeek = planDates.some((dateKey) => !isWithinWeek(dateKey, planWeekStart, planWeekEnd))
+
+      // If this looks like stale data from another week, ignore this autosave cycle.
+      if (hasOutsideCurrentWeek && !hasInsideCurrentWeek) {
+        return
+      }
     }
 
     if (planSaveInFlight.current) {
