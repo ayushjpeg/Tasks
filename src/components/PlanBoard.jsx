@@ -44,8 +44,10 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
       </header>
 
       <div className="plan-grid">
-        {recommendations.map((day) => (
-          <article key={day.date} className="plan-column">
+        {recommendations.map((day) => {
+          const visibleRecommended = day.recommended.filter((rec) => !plannedIds.has(rec.taskId))
+
+          return <article key={day.date} className="plan-column">
             <header className="plan-column__header">
               <div>
                 <p className="eyebrow">{day.label}</p>
@@ -55,17 +57,17 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
 
             <div className="plan-section">
               <p className="muted">Recommended</p>
-              {!day.recommended.length && <p className="muted">Nothing recommended today.</p>}
+              {!visibleRecommended.length && <p className="muted">Nothing recommended today.</p>}
               <div className="plan-list">
-                {day.recommended.map((rec) => (
+                {visibleRecommended.map((rec) => (
                   <div key={`${rec.taskId}-${rec.status}`} className="plan-item" style={{ borderLeft: `4px solid ${statusColor(rec.status)}` }}>
                     <div>
                       <strong>{rec.title}</strong>
                       <p className="muted">{rec.duration} min • window {rec.windowStart} → {rec.windowEnd}</p>
                       {rec.status === 'late' && <span className="pill pill--alert">Outside window</span>}
                     </div>
-                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)} disabled={plannedIds.has(rec.taskId)}>
-                      {plannedIds.has(rec.taskId) ? 'Added' : 'Add'}
+                    <button className="btn-secondary" onClick={() => handleAdd(rec.taskId, day.date)}>
+                      Add
                     </button>
                   </div>
                 ))}
@@ -122,7 +124,7 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
               </select>
             </div>
           </article>
-        ))}
+        })}
       </div>
     </section>
   )
