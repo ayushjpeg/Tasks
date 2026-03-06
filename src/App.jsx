@@ -26,6 +26,8 @@ const tabs = [
   { id: 'history', label: 'History' },
 ]
 
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev'
+
 const plansEqual = (a, b) => {
   const aKeys = Object.keys(a || {})
   const bKeys = Object.keys(b || {})
@@ -492,6 +494,7 @@ function App() {
       <header className="topbar">
         <div>
           <h1>Task Orchestrator</h1>
+          <p className="version-badge">Version {APP_VERSION}</p>
           {loadError && <p className="muted">{loadError}</p>}
           {!loadError && syncMessage && <p className="muted">{syncMessage}</p>}
         </div>

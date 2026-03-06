@@ -25,6 +25,7 @@ const getRecurrenceWindow = (task, lastCompleted) => {
 
 export const buildRecommendations = ({ tasks = [], history = [], weekStart, plannedSlots = {} }) => {
   const start = dayjs(weekStart).startOf('day')
+  const end = start.add(6, 'day').endOf('day')
   const days = Array.from({ length: 7 }, (_, i) => start.add(i, 'day'))
   const lastCompleted = getLastCompletedMap(history)
 
@@ -47,6 +48,12 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
     tasks.forEach((task) => {
       const plannedDay = earliestPlanned[task.id]
       const lastDone = lastCompleted[task.id]
+
+      // If task was completed during this planning week, don't recommend it again later in the same week.
+      const completedThisWeek = !!lastDone && !lastDone.isBefore(start, 'day') && !lastDone.isAfter(end, 'day')
+      if (completedThisWeek && !day.isBefore(lastDone, 'day')) {
+        return
+      }
 
       // If user planned this task for a day this week:
       // - hide it before and on that day
