@@ -14,9 +14,14 @@ const slotDayKey = (slot) => {
 const getLastCompletedMap = (history) => {
   const latest = {}
   history.forEach((entry) => {
-    const existing = latest[entry.taskId]
-    if (!existing || dayjs(entry.completedAt).isAfter(existing)) {
-      latest[entry.taskId] = dayjs(entry.completedAt)
+    const taskId = entry.taskId || entry.task_id
+    const completedAt = entry.completedAt || entry.completed_at
+    if (!taskId || !completedAt) return
+    const completed = dayjs(completedAt)
+    if (!completed.isValid()) return
+    const existing = latest[taskId]
+    if (!existing || completed.isAfter(existing)) {
+      latest[taskId] = completed
     }
   })
   return latest
@@ -34,6 +39,7 @@ const getRecurrenceWindow = (task, lastCompleted) => {
 
 export const buildRecommendations = ({ tasks = [], history = [], weekStart, plannedSlots = {} }) => {
   const start = dayjs(weekStart).startOf('day')
+  const end = start.add(6, 'day').endOf('day')
   const days = Array.from({ length: 7 }, (_, i) => start.add(i, 'day'))
   const lastCompleted = getLastCompletedMap(history)
 
@@ -71,15 +77,17 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
       const scheduledDays = scheduledDayKeys.map((key) => dayjs(key)).filter((value) => value.isValid())
       scheduledDays.sort((a, b) => (a.isBefore(b, 'day') ? -1 : 1))
 
+      const scheduledDaysThisWeek = scheduledDays.filter((scheduledDay) => !scheduledDay.isBefore(start, 'day') && !scheduledDay.isAfter(end, 'day'))
+
       // If this task is already scheduled for a future day, do not recommend it earlier.
-      const hasUpcomingScheduledDay = scheduledDays.some((scheduledDay) => scheduledDay.isAfter(day, 'day'))
+      const hasUpcomingScheduledDay = scheduledDaysThisWeek.some((scheduledDay) => scheduledDay.isAfter(day, 'day'))
       if (hasUpcomingScheduledDay) return
 
       const scheduledToday = scheduledDayKeys.some((scheduledDayKey) => scheduledDayKey === dayIso)
       if (scheduledToday) return
 
       let latestScheduledBefore = null
-      scheduledDays.forEach((scheduledDay) => {
+      scheduledDaysThisWeek.forEach((scheduledDay) => {
         if (!scheduledDay.isBefore(day, 'day')) return
         if (!latestScheduledBefore || scheduledDay.isAfter(latestScheduledBefore, 'day')) {
           latestScheduledBefore = scheduledDay
