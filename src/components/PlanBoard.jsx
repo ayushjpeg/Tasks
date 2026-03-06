@@ -7,7 +7,14 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
   const weekLabel = `${dayjs(weekStart).format('MMM D')} – ${dayjs(weekStart).add(6, 'day').format('MMM D')}`
   const recommendations = buildRecommendations({ tasks, history, weekStart, plannedSlots: planned })
 
-  const orderedTasksForDay = (date) => planned[date] || []
+  const orderedTasksForDay = (date) => {
+    const seen = new Set()
+    return (planned[date] || []).filter((taskId) => {
+      if (!taskId || seen.has(taskId)) return false
+      seen.add(taskId)
+      return true
+    })
+  }
 
   const handleAdd = (taskId, date) => {
     if (!taskId) return

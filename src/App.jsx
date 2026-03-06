@@ -40,8 +40,25 @@ const plansEqual = (a, b) => {
   })
 }
 
+const normalizePlanMap = (planMap = {}) => {
+  const normalized = {}
+  Object.entries(planMap).forEach(([date, taskIds]) => {
+    const seen = new Set()
+    const unique = []
+    ;(taskIds || []).forEach((taskId) => {
+      if (!taskId || seen.has(taskId)) return
+      seen.add(taskId)
+      unique.push(taskId)
+    })
+    if (unique.length) {
+      normalized[date] = unique
+    }
+  })
+  return normalized
+}
+
 const buildPlanPayload = (planned = {}) =>
-  Object.entries(planned).flatMap(([date, taskIds]) =>
+  Object.entries(normalizePlanMap(planned)).flatMap(([date, taskIds]) =>
     (taskIds || []).map((taskId) => ({
       task_id: taskId,
       scheduled_date: date,
@@ -122,11 +139,13 @@ function App() {
       })
     })
 
+    const normalizedNextPlan = normalizePlanMap(nextPlan)
+
     setPlanned((prev) => {
-      if (plansEqual(prev, nextPlan)) return prev
+      if (plansEqual(prev, normalizedNextPlan)) return prev
       skipNextPlanCommit.current = true
       setPlanStatus('Synced from saved plan')
-      return nextPlan
+      return normalizedNextPlan
     })
   }, [tasks, planWeekStart, planWeekEnd])
 
@@ -195,7 +214,7 @@ function App() {
   }, [commitPlan])
 
   useEffect(() => {
-    latestPlanRef.current = planned
+    latestPlanRef.current = normalizePlanMap(planned)
     requestPlanSave()
   }, [planned, requestPlanSave])
 
