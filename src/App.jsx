@@ -180,7 +180,8 @@ function App() {
 
   const weekStart = dayjs(activeDate).startOf('week')
   const weekKey = weekStart.format('YYYY-MM-DD')
-  const planner = useMemo(() => buildPlanner({ tasks, startDate: weekStart, days: 7 }), [tasks, weekKey])
+  const historyKey = history.length
+  const planner = useMemo(() => buildPlanner({ tasks, history, startDate: weekStart, days: 7 }), [tasks, historyKey, weekKey])
   const activeDay = planner.days.find((day) => day.date === activeDate) ?? planner.days[0]
   const todayIso = dayjs().format('YYYY-MM-DD')
   const todaySummary = planner.days.find((day) => day.date === todayIso)
