@@ -25,19 +25,29 @@ const getRecurrenceWindow = (task, lastCompleted) => {
 
 export const buildRecommendations = ({ tasks = [], history = [], weekStart, plannedSlots = {} }) => {
   const start = dayjs(weekStart).startOf('day')
-  const end = start.add(6, 'day').endOf('day')
   const days = Array.from({ length: 7 }, (_, i) => start.add(i, 'day'))
   const lastCompleted = getLastCompletedMap(history)
 
-  // Track earliest planned date per task to avoid recommending again after scheduled.
-  const earliestPlanned = {}
-  Object.entries(plannedSlots).forEach(([date, items]) => {
-    const day = dayjs(date)
-    items.forEach((taskId) => {
-      const existing = earliestPlanned[taskId]
-      if (!existing || day.isBefore(existing, 'day')) {
-        earliestPlanned[taskId] = day
+  // Combine persisted scheduled_slots and in-memory planned slots as day keys per task.
+  const scheduledDaysByTask = {}
+  tasks.forEach((task) => {
+    const dayKeys = new Set()
+    ;(task.scheduledSlots || []).forEach((slot) => {
+      const parsed = dayjs(slot)
+      if (parsed.isValid()) {
+        dayKeys.add(parsed.format('YYYY-MM-DD'))
       }
+    })
+    scheduledDaysByTask[task.id] = dayKeys
+  })
+
+  Object.entries(plannedSlots || {}).forEach(([date, items]) => {
+    const key = dayjs(date).format('YYYY-MM-DD')
+    ;(items || []).forEach((taskId) => {
+      if (!scheduledDaysByTask[taskId]) {
+        scheduledDaysByTask[taskId] = new Set()
+      }
+      scheduledDaysByTask[taskId].add(key)
     })
   })
 
@@ -46,33 +56,33 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
     const recommended = []
 
     tasks.forEach((task) => {
-      const plannedDay = earliestPlanned[task.id]
-      const lastDone = lastCompleted[task.id]
+      const historyLastDone = lastCompleted[task.id]
+      const metaLastDone = task.lastCompletedAt ? dayjs(task.lastCompletedAt) : null
+      const lastDone = historyLastDone || (metaLastDone?.isValid() ? metaLastDone : null)
 
-      // If task was completed during this planning week, don't recommend it again later in the same week.
-      const completedThisWeek = !!lastDone && !lastDone.isBefore(start, 'day') && !lastDone.isAfter(end, 'day')
-      if (completedThisWeek && !day.isBefore(lastDone, 'day')) {
-        return
-      }
+      const scheduledDays = Array.from(scheduledDaysByTask[task.id] || []).map((value) => dayjs(value))
+      const scheduledToday = scheduledDays.some((scheduledDay) => scheduledDay.isSame(day, 'day'))
+      if (scheduledToday) return
 
-      // If user planned this task for a day this week:
-      // - hide it before and on that day
-      // - show as late only after that day if it still wasn't completed
-      if (plannedDay) {
-        if (!day.isAfter(plannedDay, 'day')) {
-          return
+      let latestScheduledBefore = null
+      scheduledDays.forEach((scheduledDay) => {
+        if (!scheduledDay.isBefore(day, 'day')) return
+        if (!latestScheduledBefore || scheduledDay.isAfter(latestScheduledBefore, 'day')) {
+          latestScheduledBefore = scheduledDay
         }
+      })
 
-        const completedAfterPlanned = !!lastDone && (lastDone.isSame(plannedDay, 'day') || lastDone.isAfter(plannedDay, 'day'))
-        if (!completedAfterPlanned) {
+      if (latestScheduledBefore) {
+        const completedAfterScheduled = !!lastDone && !lastDone.isBefore(latestScheduledBefore, 'day')
+        if (!completedAfterScheduled) {
           recommended.push({
             taskId: task.id,
             title: task.title,
             priority: task.priority,
             duration: task.duration,
             status: 'late',
-            windowStart: iso(plannedDay),
-            windowEnd: iso(plannedDay),
+            windowStart: iso(latestScheduledBefore),
+            windowEnd: iso(latestScheduledBefore),
             lastCompletedAt: lastDone ? lastDone.toISOString() : null,
           })
         }
