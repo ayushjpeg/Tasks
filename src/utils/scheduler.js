@@ -7,33 +7,6 @@ const labelForPriority = {
 }
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
-const DAILY_TARGET_MINUTES = 240
-const DEFAULT_CHUNK_MINUTES = 60
-
-const getLatestCompletionByTask = (tasks, history = []) => {
-  const map = {}
-
-  tasks.forEach((task) => {
-    const metaDone = task.lastCompletedAt ? dayjs(task.lastCompletedAt) : null
-    if (metaDone?.isValid()) {
-      map[task.id] = metaDone
-    }
-  })
-
-  history.forEach((entry) => {
-    const taskId = entry.taskId || entry.task_id
-    const completedAt = entry.completedAt || entry.completed_at
-    if (!taskId || !completedAt) return
-    const completed = dayjs(completedAt)
-    if (!completed.isValid()) return
-    const existing = map[taskId]
-    if (!existing || completed.isAfter(existing)) {
-      map[taskId] = completed
-    }
-  })
-
-  return map
-}
 
 const buildTaskCard = (task, date, overrides = {}) => {
   const status = overrides.status ?? 'due'
@@ -71,67 +44,9 @@ const sortDayTasks = (tasks) => {
   })
 }
 
-const distributeFloatingTasks = (days, floatingTasks) => {
-  if (!floatingTasks.length) return
-  const loads = days.map((day) => day.totalMinutes)
-  const sorted = [...floatingTasks].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2))
-
-  sorted.forEach((task) => {
-    let remaining = task.remainingDuration ?? task.duration
-    if (remaining <= 0) return
-    let chunkIndex = 1
-    let dayIndex = 0
-    const maxChunk = task.maxChunkMinutes || DEFAULT_CHUNK_MINUTES
-    const deferUntil = task.deferUntil ? dayjs(task.deferUntil) : null
-
-    while (remaining > 0) {
-      if (dayIndex >= days.length) dayIndex = days.length - 1
-      const targetDay = days[dayIndex]
-      const dayDate = dayjs(targetDay.date)
-      if (deferUntil && dayDate.isBefore(deferUntil, 'day')) {
-        if (dayIndex === days.length - 1) {
-          // no more days in view; ignore defer so task still shows up
-        } else {
-          dayIndex += 1
-          continue
-        }
-      }
-
-      let chunk = remaining
-      if (task.autoSplit || remaining > maxChunk) {
-        const available = Math.max(30, DAILY_TARGET_MINUTES - loads[dayIndex])
-        chunk = Math.min(remaining, maxChunk, available > 0 ? available : maxChunk)
-      }
-
-      if (chunk <= 0) {
-        dayIndex += 1
-        continue
-      }
-
-      const card = buildTaskCard(task, targetDay.date, {
-        duration: chunk,
-        status: 'floating',
-        type: 'floating',
-        part: task.autoSplit || remaining < task.duration ? `Part ${chunkIndex}` : null,
-        priorityLabel: 'Auto scheduled',
-      })
-
-      targetDay.tasks.push(card)
-      targetDay.totalMinutes += chunk
-      loads[dayIndex] += chunk
-      remaining -= chunk
-      chunkIndex += 1
-
-      if (!task.autoSplit) break
-      dayIndex += 1
-    }
-  })
-}
-
-export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), days = 7 }) => {
+export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
   const start = dayjs(startDate).startOf('day')
   const startIso = start.format('YYYY-MM-DD')
-  const latestDoneByTask = getLatestCompletionByTask(tasks, history)
   const plannerDays = Array.from({ length: days }, (_, index) => {
     const date = start.add(index, 'day')
     const iso = date.format('YYYY-MM-DD')
@@ -141,74 +56,31 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
       const slots = (task.scheduledSlots || [])
         .map((value) => ({ raw: value, parsed: dayjs(value) }))
         .filter((slot) => slot.parsed.isValid())
-      const latestDone = latestDoneByTask[task.id]
       const todaysSlots = slots.filter((slot) => slot.parsed.isSame(iso, 'day'))
-      const pendingSlots = todaysSlots.filter((slot) => !latestDone || latestDone.isBefore(slot.parsed, 'day'))
-      pendingSlots.forEach((slot, slotIndex) => {
+      todaysSlots.forEach((slot, slotIndex) => {
         const card = buildTaskCard(task, iso, {
           status: 'due',
           type: 'scheduled',
           dueDate: iso,
           scheduledSlot: slot.raw,
           scheduledTime: slot.parsed.format('HH:mm'),
-          part: pendingSlots.length > 1 ? `Slot ${slotIndex + 1}` : null,
+          part: todaysSlots.length > 1 ? `Slot ${slotIndex + 1}` : null,
           priorityLabel: 'Scheduled slot',
         })
         scheduledCards.push(card)
       })
     })
 
-    const dueToday = tasks
-      .filter((task) => !task.scheduledSlots?.length && task.nextDueDate)
-      .filter((task) => dayjs(task.nextDueDate).isSame(iso, 'day'))
-      .map((task) => buildTaskCard(task, iso))
-
-    const totalMinutes = [...scheduledCards, ...dueToday].reduce((sum, task) => sum + task.duration, 0)
+    const totalMinutes = scheduledCards.reduce((sum, task) => sum + task.duration, 0)
 
     return {
       date: iso,
       label: date.format('dddd, MMM D'),
       shortLabel: date.format('ddd DD'),
-      tasks: [...scheduledCards, ...dueToday],
+      tasks: scheduledCards,
       totalMinutes,
     }
   })
-
-  const overdue = tasks
-    .filter((task) => task.nextDueDate)
-    .filter((task) => dayjs(task.nextDueDate).isBefore(start, 'day'))
-    .map((task) => buildTaskCard(task, startIso, { status: 'overdue' }))
-
-  const overdueSlots = tasks
-    .flatMap((task) =>
-      (task.scheduledSlots || [])
-        .map((slot) => ({ task, slotRaw: slot, slot: dayjs(slot), latestDone: latestDoneByTask[task.id] }))
-        .filter(({ slot }) => slot.isValid()),
-    )
-    .filter(({ slot, latestDone }) => {
-      if (!slot.isBefore(start, 'day')) return false
-      if (!latestDone?.isValid()) return true
-      return latestDone.isBefore(slot, 'day')
-    })
-    .map(({ task, slot, slotRaw }) =>
-      buildTaskCard(task, startIso, {
-        status: 'overdue',
-        type: 'scheduled',
-        dueDate: slot.format('YYYY-MM-DD'),
-        scheduledSlot: slotRaw,
-        scheduledTime: slot.format('HH:mm'),
-        priorityLabel: 'Scheduled slot',
-      }),
-    )
-
-  if (plannerDays[0]) {
-    const overdueAll = [...overdue, ...overdueSlots]
-    plannerDays[0].tasks = [...overdueAll, ...plannerDays[0].tasks]
-    plannerDays[0].totalMinutes += overdueAll.reduce((sum, task) => sum + task.duration, 0)
-  }
-
-  const floating = tasks.filter((task) => task.recurrence?.mode === 'floating')
-  distributeFloatingTasks(plannerDays, floating)
 
   plannerDays.forEach((day) => {
     day.tasks = sortDayTasks(day.tasks)
