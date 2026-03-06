@@ -33,9 +33,9 @@ const getRecurrenceWindow = (task, lastCompleted, baseOverride = null, extraOffs
   const endBefore = Math.max(startAfter, cfg.end_before_days ?? cfg.endBeforeDays ?? startAfter)
   const base = (baseOverride || lastCompleted || dayjs()).add(extraOffsetDays, 'day')
 
-  // Treat recurrence values as full "gap days" between occurrences.
-  // Example: day 1 -> every other day (Mon then Wed), not next day.
-  const cadenceOffset = 1
+  // Treat recurrence as direct day offsets from the base day.
+  // Example: day 1 -> next day (Mon then Tue).
+  const cadenceOffset = 0
   const windowStart = base.add(startAfter + cadenceOffset, 'day')
   const windowEnd = base.add(endBefore + cadenceOffset, 'day')
   return { windowStart, windowEnd }
@@ -103,7 +103,7 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
         if (completedAfterScheduled) return
 
         // Use missed scheduled day as recurrence base.
-        // With gap-day cadence, day 1 from Monday becomes Wednesday.
+        // With direct-offset cadence, day 1 from Monday becomes Tuesday.
         const { windowStart, windowEnd } = getRecurrenceWindow(task, lastDone, latestScheduledBefore)
         if (day.isBefore(windowStart, 'day')) return
 
