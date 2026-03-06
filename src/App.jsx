@@ -135,7 +135,7 @@ function App() {
         })
         const refreshedTasks = await fetchTasks()
         setTasks(refreshedTasks)
-        setPlanStatus('Saved')
+        setPlanStatus(planPayload.length ? 'Saved' : 'Deleted week plan')
       } catch (error) {
         console.error('Failed to save plan', error)
         setPlanStatus('Save failed')
@@ -364,6 +364,12 @@ function App() {
       }
 
       const clearPlan = () => setPlanned({})
+      const deletePlan = () => {
+        const hasPlanned = Object.keys(planned || {}).length > 0
+        if (hasPlanned && !window.confirm('Delete this week\'s plan?')) return
+        setPlanStatus('Deleting…')
+        setPlanned({})
+      }
 
       return (
         <PlanBoard
@@ -376,6 +382,7 @@ function App() {
           onMove={moveInPlan}
           onWeekChange={(nextStart) => setPlanWeekStart(dayjs(nextStart).startOf('week'))}
           onClear={clearPlan}
+          onDelete={deletePlan}
           planStatus={planStatus}
         />
       )
