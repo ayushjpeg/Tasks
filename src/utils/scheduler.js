@@ -72,6 +72,7 @@ const sortDayTasks = (tasks) => {
 export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), days = 7 }) => {
   const start = dayjs(startDate).startOf('day')
   const startIso = start.format('YYYY-MM-DD')
+  const previousDay = start.subtract(1, 'day')
   const latestDoneByTask = getLatestCompletionByTask(tasks, history)
   const plannerDays = Array.from({ length: days }, (_, index) => {
     const date = start.add(index, 'day')
@@ -118,7 +119,8 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
         .filter(({ slot }) => slot.isValid()),
     )
     .filter(({ slot, latestDone }) => {
-      if (!slot.isBefore(start, 'day')) return false
+      // Carry over only the immediately previous day, not all historical missed slots.
+      if (!slot.isSame(previousDay, 'day')) return false
       if (!latestDone?.isValid()) return true
       return latestDone.isBefore(slot, 'day')
     })
