@@ -32,8 +32,12 @@ const getRecurrenceWindow = (task, lastCompleted, baseOverride = null, extraOffs
   const startAfter = Math.max(0, cfg.start_after_days ?? cfg.startAfterDays ?? 0)
   const endBefore = Math.max(startAfter, cfg.end_before_days ?? cfg.endBeforeDays ?? startAfter)
   const base = (baseOverride || lastCompleted || dayjs()).add(extraOffsetDays, 'day')
-  const windowStart = base.add(startAfter, 'day')
-  const windowEnd = base.add(endBefore, 'day')
+
+  // Treat recurrence values as full "gap days" between occurrences.
+  // Example: day 1 -> every other day (Mon then Wed), not next day.
+  const cadenceOffset = 1
+  const windowStart = base.add(startAfter + cadenceOffset, 'day')
+  const windowEnd = base.add(endBefore + cadenceOffset, 'day')
   return { windowStart, windowEnd }
 }
 
