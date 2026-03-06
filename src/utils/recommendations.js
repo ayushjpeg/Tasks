@@ -2,6 +2,15 @@ import dayjs from './dates'
 
 const iso = (d) => dayjs(d).format('YYYY-MM-DD')
 
+const slotDayKey = (slot) => {
+  if (!slot) return null
+  const raw = String(slot)
+  const datePrefix = raw.match(/^\d{4}-\d{2}-\d{2}/)
+  if (datePrefix) return datePrefix[0]
+  const parsed = dayjs(raw)
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : null
+}
+
 const getLastCompletedMap = (history) => {
   const latest = {}
   history.forEach((entry) => {
@@ -33,10 +42,8 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
   tasks.forEach((task) => {
     const dayKeys = new Set()
     ;(task.scheduledSlots || []).forEach((slot) => {
-      const parsed = dayjs(slot)
-      if (parsed.isValid()) {
-        dayKeys.add(parsed.format('YYYY-MM-DD'))
-      }
+      const key = slotDayKey(slot)
+      if (key) dayKeys.add(key)
     })
     scheduledDaysByTask[task.id] = dayKeys
   })
@@ -60,12 +67,14 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
       const metaLastDone = task.lastCompletedAt ? dayjs(task.lastCompletedAt) : null
       const lastDone = historyLastDone || (metaLastDone?.isValid() ? metaLastDone : null)
 
-      const scheduledDays = Array.from(scheduledDaysByTask[task.id] || []).map((value) => dayjs(value))
-      const scheduledToday = scheduledDays.some((scheduledDay) => scheduledDay.isSame(day, 'day'))
+      const scheduledDayKeys = Array.from(scheduledDaysByTask[task.id] || [])
+      const scheduledToday = scheduledDayKeys.some((scheduledDayKey) => scheduledDayKey === dayIso)
       if (scheduledToday) return
 
       let latestScheduledBefore = null
-      scheduledDays.forEach((scheduledDay) => {
+      scheduledDayKeys.forEach((scheduledDayKey) => {
+        const scheduledDay = dayjs(scheduledDayKey)
+        if (!scheduledDay.isValid()) return
         if (!scheduledDay.isBefore(day, 'day')) return
         if (!latestScheduledBefore || scheduledDay.isAfter(latestScheduledBefore, 'day')) {
           latestScheduledBefore = scheduledDay
