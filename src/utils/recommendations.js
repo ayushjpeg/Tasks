@@ -68,13 +68,18 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
       const lastDone = historyLastDone || (metaLastDone?.isValid() ? metaLastDone : null)
 
       const scheduledDayKeys = Array.from(scheduledDaysByTask[task.id] || [])
+      const scheduledDays = scheduledDayKeys.map((key) => dayjs(key)).filter((value) => value.isValid())
+      scheduledDays.sort((a, b) => (a.isBefore(b, 'day') ? -1 : 1))
+
+      // If this task is already scheduled for a future day, do not recommend it earlier.
+      const hasUpcomingScheduledDay = scheduledDays.some((scheduledDay) => scheduledDay.isAfter(day, 'day'))
+      if (hasUpcomingScheduledDay) return
+
       const scheduledToday = scheduledDayKeys.some((scheduledDayKey) => scheduledDayKey === dayIso)
       if (scheduledToday) return
 
       let latestScheduledBefore = null
-      scheduledDayKeys.forEach((scheduledDayKey) => {
-        const scheduledDay = dayjs(scheduledDayKey)
-        if (!scheduledDay.isValid()) return
+      scheduledDays.forEach((scheduledDay) => {
         if (!scheduledDay.isBefore(day, 'day')) return
         if (!latestScheduledBefore || scheduledDay.isAfter(latestScheduledBefore, 'day')) {
           latestScheduledBefore = scheduledDay
