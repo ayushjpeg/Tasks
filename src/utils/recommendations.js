@@ -102,9 +102,9 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
         const completedAfterScheduled = !!lastDone && !lastDone.isBefore(latestScheduledBefore, 'day')
         if (completedAfterScheduled) return
 
-        // Use missed scheduled day as recurrence base, with one extra day offset so a 2-day cycle
-        // scheduled on Monday starts recommending again on Thursday (not Wednesday).
-        const { windowStart, windowEnd } = getRecurrenceWindow(task, lastDone, latestScheduledBefore, 1)
+        // Use missed scheduled day as recurrence base.
+        // With gap-day cadence, day 1 from Monday becomes Wednesday.
+        const { windowStart, windowEnd } = getRecurrenceWindow(task, lastDone, latestScheduledBefore)
         if (day.isBefore(windowStart, 'day')) return
 
         const status = day.isAfter(windowEnd, 'day') ? 'late' : 'recommended'
