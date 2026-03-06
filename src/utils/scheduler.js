@@ -8,6 +8,31 @@ const labelForPriority = {
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
 
+const getLatestCompletionByTask = (tasks, history = []) => {
+  const latest = {}
+
+  tasks.forEach((task) => {
+    const metaDone = task.lastCompletedAt ? dayjs(task.lastCompletedAt) : null
+    if (metaDone?.isValid()) {
+      latest[task.id] = metaDone
+    }
+  })
+
+  history.forEach((entry) => {
+    const taskId = entry.taskId || entry.task_id
+    const completedAt = entry.completedAt || entry.completed_at
+    if (!taskId || !completedAt) return
+    const parsed = dayjs(completedAt)
+    if (!parsed.isValid()) return
+    const existing = latest[taskId]
+    if (!existing || parsed.isAfter(existing)) {
+      latest[taskId] = parsed
+    }
+  })
+
+  return latest
+}
+
 const buildTaskCard = (task, date, overrides = {}) => {
   const status = overrides.status ?? 'due'
   const duration = overrides.duration ?? task.duration
@@ -44,9 +69,10 @@ const sortDayTasks = (tasks) => {
   })
 }
 
-export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
+export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), days = 7 }) => {
   const start = dayjs(startDate).startOf('day')
   const startIso = start.format('YYYY-MM-DD')
+  const latestDoneByTask = getLatestCompletionByTask(tasks, history)
   const plannerDays = Array.from({ length: days }, (_, index) => {
     const date = start.add(index, 'day')
     const iso = date.format('YYYY-MM-DD')
@@ -56,15 +82,18 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
       const slots = (task.scheduledSlots || [])
         .map((value) => ({ raw: value, parsed: dayjs(value) }))
         .filter((slot) => slot.parsed.isValid())
+      const latestDone = latestDoneByTask[task.id]
       const todaysSlots = slots.filter((slot) => slot.parsed.isSame(iso, 'day'))
-      todaysSlots.forEach((slot, slotIndex) => {
+      const pendingSlots = todaysSlots.filter((slot) => !latestDone || latestDone.isBefore(slot.parsed, 'day'))
+
+      pendingSlots.forEach((slot, slotIndex) => {
         const card = buildTaskCard(task, iso, {
           status: 'due',
           type: 'scheduled',
           dueDate: iso,
           scheduledSlot: slot.raw,
           scheduledTime: slot.parsed.format('HH:mm'),
-          part: todaysSlots.length > 1 ? `Slot ${slotIndex + 1}` : null,
+          part: pendingSlots.length > 1 ? `Slot ${slotIndex + 1}` : null,
           priorityLabel: 'Scheduled slot',
         })
         scheduledCards.push(card)
@@ -81,6 +110,33 @@ export const buildPlanner = ({ tasks = [], startDate = dayjs(), days = 7 }) => {
       totalMinutes,
     }
   })
+
+  const overdueSlots = tasks
+    .flatMap((task) =>
+      (task.scheduledSlots || [])
+        .map((slot) => ({ task, slotRaw: slot, slot: dayjs(slot), latestDone: latestDoneByTask[task.id] }))
+        .filter(({ slot }) => slot.isValid()),
+    )
+    .filter(({ slot, latestDone }) => {
+      if (!slot.isBefore(start, 'day')) return false
+      if (!latestDone?.isValid()) return true
+      return latestDone.isBefore(slot, 'day')
+    })
+    .map(({ task, slot, slotRaw }) =>
+      buildTaskCard(task, startIso, {
+        status: 'overdue',
+        type: 'scheduled',
+        dueDate: slot.format('YYYY-MM-DD'),
+        scheduledSlot: slotRaw,
+        scheduledTime: slot.format('HH:mm'),
+        priorityLabel: 'Scheduled slot',
+      }),
+    )
+
+  if (plannerDays[0] && overdueSlots.length) {
+    plannerDays[0].tasks = [...overdueSlots, ...plannerDays[0].tasks]
+    plannerDays[0].totalMinutes += overdueSlots.reduce((sum, task) => sum + task.duration, 0)
+  }
 
   plannerDays.forEach((day) => {
     day.tasks = sortDayTasks(day.tasks)

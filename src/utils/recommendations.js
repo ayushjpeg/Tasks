@@ -27,11 +27,11 @@ const getLastCompletedMap = (history) => {
   return latest
 }
 
-const getRecurrenceWindow = (task, lastCompleted) => {
+const getRecurrenceWindow = (task, lastCompleted, baseOverride = null, extraOffsetDays = 0) => {
   const cfg = task.recurrence || {}
   const startAfter = Math.max(0, cfg.start_after_days ?? cfg.startAfterDays ?? 0)
   const endBefore = Math.max(startAfter, cfg.end_before_days ?? cfg.endBeforeDays ?? startAfter)
-  const base = lastCompleted || dayjs()
+  const base = (baseOverride || lastCompleted || dayjs()).add(extraOffsetDays, 'day')
   const windowStart = base.add(startAfter, 'day')
   const windowEnd = base.add(endBefore, 'day')
   return { windowStart, windowEnd }
@@ -96,18 +96,24 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
 
       if (latestScheduledBefore) {
         const completedAfterScheduled = !!lastDone && !lastDone.isBefore(latestScheduledBefore, 'day')
-        if (!completedAfterScheduled) {
-          recommended.push({
-            taskId: task.id,
-            title: task.title,
-            priority: task.priority,
-            duration: task.duration,
-            status: 'late',
-            windowStart: iso(latestScheduledBefore),
-            windowEnd: iso(latestScheduledBefore),
-            lastCompletedAt: lastDone ? lastDone.toISOString() : null,
-          })
-        }
+        if (completedAfterScheduled) return
+
+        // Use missed scheduled day as recurrence base, with one extra day offset so a 2-day cycle
+        // scheduled on Monday starts recommending again on Thursday (not Wednesday).
+        const { windowStart, windowEnd } = getRecurrenceWindow(task, lastDone, latestScheduledBefore, 1)
+        if (day.isBefore(windowStart, 'day')) return
+
+        const status = day.isAfter(windowEnd, 'day') ? 'late' : 'recommended'
+        recommended.push({
+          taskId: task.id,
+          title: task.title,
+          priority: task.priority,
+          duration: task.duration,
+          status,
+          windowStart: iso(windowStart),
+          windowEnd: iso(windowEnd),
+          lastCompletedAt: lastDone ? lastDone.toISOString() : null,
+        })
         return
       }
 

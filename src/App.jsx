@@ -180,7 +180,7 @@ function App() {
 
   const weekStart = dayjs(activeDate).startOf('week')
   const weekKey = weekStart.format('YYYY-MM-DD')
-  const planner = useMemo(() => buildPlanner({ tasks, startDate: weekStart, days: 7 }), [tasks, weekKey])
+  const planner = useMemo(() => buildPlanner({ tasks, history, startDate: weekStart, days: 7 }), [tasks, history, weekKey])
   const activeDay = planner.days.find((day) => day.date === activeDate) ?? planner.days[0]
   const todayIso = dayjs().format('YYYY-MM-DD')
   const todaySummary = planner.days.find((day) => day.date === todayIso)
@@ -374,57 +374,24 @@ function App() {
 
       const clearPlan = () => setPlanned({})
       const deletePlan = async () => {
-        const hasPlanned = Object.keys(planned || {}).length > 0
-        if (hasPlanned && !window.confirm('Delete this week\'s plan?')) return
+        const hasScheduled = tasks.some((task) => (task.scheduledSlots || []).length)
+        if (hasScheduled && !window.confirm('Delete all scheduled tasks from all weeks?')) return
 
-        const weekStartIso = planWeekStart.format('YYYY-MM-DD')
-        const weekEndIso = planWeekEnd.format('YYYY-MM-DD')
-        const weekStartDate = planWeekStart.startOf('day')
-        const weekEndDate = planWeekEnd.endOf('day')
-
-        setSyncMessage('Deleting week plan…')
+        setSyncMessage('Deleting all scheduled tasks…')
         setPlanStatus('Deleting…')
 
         try {
-          await scheduleCommit({
-            weekStart: weekStartIso,
-            weekEnd: weekEndIso,
-            plan: [],
-          })
-        } catch (error) {
-          console.warn('Schedule commit clear failed; falling back to direct task updates.', error)
-
-          const tasksToUpdate = tasks.filter((task) =>
-            (task.scheduledSlots || []).some((slot) => {
-              const dt = dayjs(slot)
-              return dt.isValid() && !dt.isBefore(weekStartDate, 'day') && !dt.isAfter(weekEndDate, 'day')
-            }),
-          )
-
-          if (tasksToUpdate.length) {
-            await Promise.all(
-              tasksToUpdate.map((task) => {
-                const remainingSlots = (task.scheduledSlots || []).filter((slot) => {
-                  const dt = dayjs(slot)
-                  if (!dt.isValid()) return true
-                  return dt.isBefore(weekStartDate, 'day') || dt.isAfter(weekEndDate, 'day')
-                })
-                return apiUpdateTask({ ...task, scheduledSlots: remainingSlots })
-              }),
-            )
-          }
-        }
-
-        try {
+          const tasksToUpdate = tasks.filter((task) => (task.scheduledSlots || []).length)
+          await Promise.all(tasksToUpdate.map((task) => apiUpdateTask({ ...task, scheduledSlots: [] })))
           const refreshedTasks = await fetchTasks()
           setTasks(refreshedTasks)
           skipNextPlanCommit.current = true
           setPlanned({})
-          setPlanStatus('Deleted week plan')
+          setPlanStatus('Deleted all scheduled tasks')
         } catch (error) {
-          console.error('Failed to refresh tasks after deleting plan', error)
+          console.error('Failed to delete all schedules', error)
           setPlanStatus('Delete failed')
-          window.alert('Plan was changed, but refresh failed. Please reload once.')
+          window.alert('Unable to delete all scheduled tasks right now.')
         } finally {
           setSyncMessage('')
         }
