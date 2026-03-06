@@ -364,11 +364,61 @@ function App() {
       }
 
       const clearPlan = () => setPlanned({})
-      const deletePlan = () => {
+      const deletePlan = async () => {
         const hasPlanned = Object.keys(planned || {}).length > 0
         if (hasPlanned && !window.confirm('Delete this week\'s plan?')) return
+
+        const weekStartIso = planWeekStart.format('YYYY-MM-DD')
+        const weekEndIso = planWeekEnd.format('YYYY-MM-DD')
+        const weekStartDate = planWeekStart.startOf('day')
+        const weekEndDate = planWeekEnd.endOf('day')
+
+        setSyncMessage('Deleting week plan…')
         setPlanStatus('Deleting…')
-        setPlanned({})
+
+        try {
+          await scheduleCommit({
+            weekStart: weekStartIso,
+            weekEnd: weekEndIso,
+            plan: [],
+          })
+        } catch (error) {
+          console.warn('Schedule commit clear failed; falling back to direct task updates.', error)
+
+          const tasksToUpdate = tasks.filter((task) =>
+            (task.scheduledSlots || []).some((slot) => {
+              const dt = dayjs(slot)
+              return dt.isValid() && !dt.isBefore(weekStartDate, 'day') && !dt.isAfter(weekEndDate, 'day')
+            }),
+          )
+
+          if (tasksToUpdate.length) {
+            await Promise.all(
+              tasksToUpdate.map((task) => {
+                const remainingSlots = (task.scheduledSlots || []).filter((slot) => {
+                  const dt = dayjs(slot)
+                  if (!dt.isValid()) return true
+                  return dt.isBefore(weekStartDate, 'day') || dt.isAfter(weekEndDate, 'day')
+                })
+                return apiUpdateTask({ ...task, scheduledSlots: remainingSlots })
+              }),
+            )
+          }
+        }
+
+        try {
+          const refreshedTasks = await fetchTasks()
+          setTasks(refreshedTasks)
+          skipNextPlanCommit.current = true
+          setPlanned({})
+          setPlanStatus('Deleted week plan')
+        } catch (error) {
+          console.error('Failed to refresh tasks after deleting plan', error)
+          setPlanStatus('Delete failed')
+          window.alert('Plan was changed, but refresh failed. Please reload once.')
+        } finally {
+          setSyncMessage('')
+        }
       }
 
       return (
