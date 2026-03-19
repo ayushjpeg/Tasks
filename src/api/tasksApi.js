@@ -15,6 +15,7 @@ const request = async (path, { method = 'GET', body = undefined, headers = {} } 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     body,
+    credentials: 'include',
     headers: buildHeaders(body, headers),
   })
 
