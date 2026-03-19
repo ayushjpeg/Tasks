@@ -31,18 +31,19 @@ const authStyles = {
     color: '#fff',
   },
   bar: {
-    position: 'fixed',
-    top: 16,
-    right: 16,
-    zIndex: 1000,
     display: 'flex',
     gap: 12,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     padding: '10px 14px',
     borderRadius: '999px',
     background: 'rgba(15, 118, 110, 0.94)',
     color: '#fff',
     boxShadow: '0 12px 30px rgba(15, 23, 42, 0.2)',
+  },
+  barShell: {
+    padding: '12px 12px 0',
   },
   logout: {
     border: '1px solid rgba(255,255,255,0.2)',
@@ -130,9 +131,11 @@ export function AuthGate({ children }) {
 
   return (
     <>
-      <div style={authStyles.bar}>
-        <span>{user?.email}</span>
-        <button style={authStyles.logout} onClick={handleLogout}>Log out</button>
+      <div style={authStyles.barShell}>
+        <div style={authStyles.bar}>
+          <span style={{ overflowWrap: 'anywhere' }}>{user?.email}</span>
+          <button style={authStyles.logout} onClick={handleLogout}>Log out</button>
+        </div>
       </div>
       {children}
     </>
