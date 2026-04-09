@@ -72,6 +72,8 @@ const fromApiTask = (payload) => {
     notesLog: metadata.notesLog ?? [],
     lastCompletedAt: metadata.lastCompletedAt ?? null,
     assignedWeekdays: metadata.assigned_weekdays || [],
+    triggerTaskId: metadata.trigger_task_id ?? null,
+    triggerAfterDays: metadata.trigger_after_days ?? 0,
     createdAt: payload.created_at,
     updatedAt: payload.updated_at,
   }
@@ -99,6 +101,8 @@ const toApiTaskPayload = (task) => ({
     notesLog: task.notesLog ?? [],
     lastCompletedAt: task.lastCompletedAt ?? null,
     assigned_weekdays: task.assignedWeekdays !== undefined ? task.assignedWeekdays : undefined,
+    trigger_task_id: task.triggerTaskId ?? null,
+    trigger_after_days: task.triggerAfterDays ?? 0,
   }),
 })
 

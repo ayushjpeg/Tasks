@@ -7,8 +7,28 @@ const labelForPriority = {
 }
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
+const WINDOW_ORDER = { morning: 0, afternoon: 1, evening: 2, any: 3 }
+const STATUS_ORDER = { overdue: 0, scheduled: 1, due: 2, floating: 3 }
 const LONG_TERM_TASK = 'long_term_task'
 const LONG_TERM_GOAL = 'long_term_goal'
+
+const getDependencyTrigger = (task) => {
+  if ((task.category || 'occasional') !== 'occasional') return null
+  if (task.recurrence?.mode !== 'after_completion') return null
+  if (!task.triggerTaskId) return null
+  return {
+    triggerTaskId: task.triggerTaskId,
+    triggerAfterDays: Math.max(0, Number(task.triggerAfterDays) || 0),
+  }
+}
+
+const getDependencyDueDate = (task, latestDoneByTask) => {
+  const trigger = getDependencyTrigger(task)
+  if (!trigger) return null
+  const triggerCompletedAt = latestDoneByTask[trigger.triggerTaskId]
+  if (!triggerCompletedAt?.isValid()) return null
+  return triggerCompletedAt.startOf('day').add(trigger.triggerAfterDays, 'day')
+}
 
 const getCompletionDaysByTask = (history = []) => {
   const completionDays = {}
@@ -75,12 +95,16 @@ const buildTaskCard = (task, date, overrides = {}) => {
 }
 
 const sortDayTasks = (tasks) => {
-  const statusOrder = { overdue: 1, scheduled: 2, floating: 3, due: 4 }
   return tasks.sort((a, b) => {
+    const statusDiff = (STATUS_ORDER[a.status] ?? 4) - (STATUS_ORDER[b.status] ?? 4)
+    if (statusDiff !== 0) return statusDiff
+    const windowDiff = (WINDOW_ORDER[a.window] ?? 4) - (WINDOW_ORDER[b.window] ?? 4)
+    if (windowDiff !== 0) return windowDiff
     const priorityDiff = (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3)
     if (priorityDiff !== 0) return priorityDiff
-    const statusDiff = (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4)
-    if (statusDiff !== 0) return statusDiff
+    if (a.scheduledTime && b.scheduledTime && a.scheduledTime !== b.scheduledTime) {
+      return a.scheduledTime.localeCompare(b.scheduledTime)
+    }
     if (a.dueDate === b.dueDate) return a.title.localeCompare(b.title)
     return dayjs(a.dueDate).isBefore(b.dueDate) ? -1 : 1
   })
@@ -88,13 +112,12 @@ const sortDayTasks = (tasks) => {
 
 export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), days = 7 }) => {
   const start = dayjs(startDate).startOf('day')
-  const startIso = start.format('YYYY-MM-DD')
-  const previousDay = start.subtract(1, 'day')
   const latestDoneByTask = getLatestCompletionByTask(tasks, history)
   const completionDaysByTask = getCompletionDaysByTask(history)
   const plannerDays = Array.from({ length: days }, (_, index) => {
     const date = start.add(index, 'day')
     const iso = date.format('YYYY-MM-DD')
+    const previousDay = date.subtract(1, 'day')
     const scheduledCards = []
 
     tasks.forEach((task) => {
@@ -131,12 +154,42 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
         return
       }
 
+      const dependencyDueDate = getDependencyDueDate(task, latestDoneByTask)
+      if (dependencyDueDate?.isValid()) {
+        const latestDone = latestDoneByTask[task.id]
+        const alreadyCompletedForCurrentTrigger = latestDone?.isValid() && !latestDone.isBefore(dependencyDueDate, 'day')
+        if (!alreadyCompletedForCurrentTrigger && !date.isBefore(dependencyDueDate, 'day')) {
+          scheduledCards.push(
+            buildTaskCard(task, iso, {
+              status: date.isAfter(dependencyDueDate, 'day') ? 'overdue' : 'due',
+              type: 'after_completion',
+              dueDate: dependencyDueDate.format('YYYY-MM-DD'),
+              priorityLabel: 'After completion',
+            }),
+          )
+        }
+        return
+      }
+
       const slots = (task.scheduledSlots || [])
         .map((value) => ({ raw: value, parsed: dayjs(value) }))
         .filter((slot) => slot.parsed.isValid())
       const latestDone = latestDoneByTask[task.id]
+      const carryoverSlots = slots.filter((slot) => slot.parsed.isSame(previousDay, 'day') && (!latestDone || latestDone.isBefore(slot.parsed, 'day')))
       const todaysSlots = slots.filter((slot) => slot.parsed.isSame(iso, 'day'))
       const pendingSlots = todaysSlots.filter((slot) => !latestDone || latestDone.isBefore(slot.parsed, 'day'))
+
+      carryoverSlots.forEach((slot) => {
+        const card = buildTaskCard(task, iso, {
+          status: 'overdue',
+          type: 'scheduled',
+          dueDate: slot.parsed.format('YYYY-MM-DD'),
+          scheduledSlot: slot.raw,
+          scheduledTime: slot.parsed.format('HH:mm'),
+          priorityLabel: 'Scheduled slot',
+        })
+        scheduledCards.push(card)
+      })
 
       pendingSlots.forEach((slot, slotIndex) => {
         const card = buildTaskCard(task, iso, {
@@ -162,36 +215,6 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
       totalMinutes,
     }
   })
-
-  const overdueSlots = tasks
-    .flatMap((task) =>
-      ((task.category || 'occasional') !== 'occasional'
-        ? []
-        : (task.scheduledSlots || [])
-            .map((slot) => ({ task, slotRaw: slot, slot: dayjs(slot), latestDone: latestDoneByTask[task.id] }))
-            .filter(({ slot }) => slot.isValid())),
-    )
-    .filter(({ slot, latestDone }) => {
-      // Carry over only the immediately previous day, not all historical missed slots.
-      if (!slot.isSame(previousDay, 'day')) return false
-      if (!latestDone?.isValid()) return true
-      return latestDone.isBefore(slot, 'day')
-    })
-    .map(({ task, slot, slotRaw }) =>
-      buildTaskCard(task, startIso, {
-        status: 'overdue',
-        type: 'scheduled',
-        dueDate: slot.format('YYYY-MM-DD'),
-        scheduledSlot: slotRaw,
-        scheduledTime: slot.format('HH:mm'),
-        priorityLabel: 'Scheduled slot',
-      }),
-    )
-
-  if (plannerDays[0] && overdueSlots.length) {
-    plannerDays[0].tasks = [...overdueSlots, ...plannerDays[0].tasks]
-    plannerDays[0].totalMinutes += overdueSlots.reduce((sum, task) => sum + task.duration, 0)
-  }
 
   plannerDays.forEach((day) => {
     day.tasks = sortDayTasks(day.tasks)

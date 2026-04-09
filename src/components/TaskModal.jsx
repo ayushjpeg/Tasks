@@ -26,9 +26,11 @@ const defaultTask = {
   recurrence: { mode: 'repeat', start_after_days: 0, end_before_days: 7 },
   nextDueDate: dayjs().format('YYYY-MM-DD'),
   assignedWeekdays: [],
+  triggerTaskId: null,
+  triggerAfterDays: 0,
 }
 
-const TaskModal = ({ open, initialTask, onSave, onClose }) => {
+const TaskModal = ({ open, initialTask, availableTasks = [], onSave, onClose }) => {
   const [form, setForm] = useState(defaultTask)
 
   useEffect(() => {
@@ -42,6 +44,21 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
 
   const update = (patch) => setForm((prev) => ({ ...prev, ...patch }))
   const updateRecurrence = (patch) => update({ recurrence: { ...form.recurrence, ...patch } })
+  const dependencyOptions = availableTasks.filter((task) => task.id && task.id !== form.id)
+
+  const updateCategory = (category) => {
+    const patch = { category }
+    if (category !== 'occasional') {
+      patch.recurrence = defaultTask.recurrence
+      patch.triggerTaskId = null
+      patch.triggerAfterDays = 0
+    }
+    if (category !== 'long_term_task' && category !== 'long_term_goal') {
+      patch.assignedWeekdays = []
+    }
+    update(patch)
+  }
+
   const toggleWeekday = (value) => {
     const set = new Set(form.assignedWeekdays || [])
     if (set.has(value)) set.delete(value)
@@ -52,10 +69,19 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
   const handleSubmit = (event) => {
     event.preventDefault()
     const numericDuration = Number(form.duration) || 15
+    if (form.category === 'occasional' && form.recurrence?.mode === 'after_completion' && !form.triggerTaskId) {
+      window.alert('Choose the task that should trigger this task.')
+      return
+    }
     const payload = {
       ...form,
       id: form.id || nanoid(),
       duration: numericDuration,
+      triggerAfterDays: Math.max(0, Number(form.triggerAfterDays) || 0),
+    }
+    if (payload.category === 'occasional' && payload.recurrence?.mode === 'after_completion') {
+      payload.scheduledSlots = []
+      payload.nextDueDate = null
     }
     onSave(payload)
   }
@@ -72,7 +98,7 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
         </header>
         <label>
           Category
-          <select value={form.category} onChange={(event) => update({ category: event.target.value })}>
+          <select value={form.category} onChange={(event) => updateCategory(event.target.value)}>
             <option value="daily">Daily</option>
             <option value="occasional">Occasional</option>
             <option value="long_term_task">Long-term task</option>
@@ -138,28 +164,67 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
                 />
                 One time
               </label>
+              <label className={form.recurrence?.mode === 'after_completion' ? 'chip chip--active' : 'chip'}>
+                <input
+                  type="radio"
+                  name="recurrence-mode"
+                  value="after_completion"
+                  checked={form.recurrence?.mode === 'after_completion'}
+                  onChange={() => updateRecurrence({ mode: 'after_completion' })}
+                  style={{ display: 'none' }}
+                />
+                After task completion
+              </label>
             </div>
-            <label>
-              Earliest in (days from today)
-              <input
-                type="number"
-                min="0"
-                value={form.recurrence?.start_after_days ?? 0}
-                onChange={(event) => updateRecurrence({ start_after_days: Math.max(0, Number(event.target.value) || 0) })}
-              />
-            </label>
-            <label>
-              Latest by (days from today)
-              <input
-                type="number"
-                min={form.recurrence?.start_after_days ?? 0}
-                value={form.recurrence?.end_before_days ?? form.recurrence?.start_after_days ?? 0}
-                onChange={(event) =>
-                  updateRecurrence({ end_before_days: Math.max(form.recurrence?.start_after_days ?? 0, Number(event.target.value) || 0) })
-                }
-              />
-            </label>
-            <p className="muted">Only occasional tasks appear in the plan tab. Use this window as guidance for that weekly plan.</p>
+            {form.recurrence?.mode === 'after_completion' ? (
+              <>
+                <label>
+                  Trigger task
+                  <select value={form.triggerTaskId || ''} onChange={(event) => update({ triggerTaskId: event.target.value || null })}>
+                    <option value="">Choose a task</option>
+                    {dependencyOptions.map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {task.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Days after trigger completion
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.triggerAfterDays ?? 0}
+                    onChange={(event) => update({ triggerAfterDays: Math.max(0, Number(event.target.value) || 0) })}
+                  />
+                </label>
+                <p className="muted">This task will appear automatically in Daily after the selected task is completed and the delay has passed.</p>
+              </>
+            ) : (
+              <>
+                <label>
+                  Earliest in (days from today)
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.recurrence?.start_after_days ?? 0}
+                    onChange={(event) => updateRecurrence({ start_after_days: Math.max(0, Number(event.target.value) || 0) })}
+                  />
+                </label>
+                <label>
+                  Latest by (days from today)
+                  <input
+                    type="number"
+                    min={form.recurrence?.start_after_days ?? 0}
+                    value={form.recurrence?.end_before_days ?? form.recurrence?.start_after_days ?? 0}
+                    onChange={(event) =>
+                      updateRecurrence({ end_before_days: Math.max(form.recurrence?.start_after_days ?? 0, Number(event.target.value) || 0) })
+                    }
+                  />
+                </label>
+                <p className="muted">Only occasional tasks appear in the plan tab. Use this window as guidance for that weekly plan.</p>
+              </>
+            )}
           </fieldset>
         )}
         {form.category === 'daily' && <p className="muted">Daily tasks are placed automatically every day and never appear in the plan tab.</p>}

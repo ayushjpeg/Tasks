@@ -12,11 +12,28 @@ const describeRecurrence = (task) => {
   if (task.category === 'long_term_task') return `Long-term task • ${describeAssignedWeekdays(task)}`
   if (task.category === 'long_term_goal') return `Long-term goal • ${describeAssignedWeekdays(task)}`
   const mode = task.recurrence?.mode
+  if (mode === 'after_completion') {
+    return `After completion • ${task.triggerAfterDays ?? 0} day delay`
+  }
   const start = task.recurrence?.start_after_days ?? 0
   const end = task.recurrence?.end_before_days ?? start
   if (mode === 'repeat') return `Repeat window: day ${start} to day ${end}`
   if (mode === 'one_time') return `One time between day ${start} and day ${end}`
   return 'One-off'
+}
+
+const categoryLabel = (category) => {
+  if (category === 'long_term_task') return 'Long-term task'
+  if (category === 'long_term_goal') return 'Long-term goal'
+  if (category === 'daily') return 'Daily'
+  return 'Occasional'
+}
+
+const dependencyLabel = (task, tasks) => {
+  if (task.recurrence?.mode !== 'after_completion' || !task.triggerTaskId) return null
+  const trigger = tasks.find((candidate) => candidate.id === task.triggerTaskId)
+  if (!trigger) return 'Waiting for selected task'
+  return `${trigger.title} + ${task.triggerAfterDays ?? 0} day${(task.triggerAfterDays ?? 0) === 1 ? '' : 's'}`
 }
 
 const TaskLibrary = ({ tasks, onCreate, onEdit, onDelete }) => (
@@ -41,7 +58,7 @@ const TaskLibrary = ({ tasks, onCreate, onEdit, onDelete }) => (
           <ul>
             <li>
               <span>Category</span>
-              <strong>{(task.category || 'occasional').replace('_', ' ')}</strong>
+              <strong>{categoryLabel(task.category || 'occasional')}</strong>
             </li>
             <li>
               <span>Next due</span>
@@ -50,8 +67,8 @@ const TaskLibrary = ({ tasks, onCreate, onEdit, onDelete }) => (
                   ? 'Every day'
                   : task.category === 'long_term_task' || task.category === 'long_term_goal'
                   ? describeAssignedWeekdays(task)
-                  : task.recurrence?.mode === 'floating'
-                  ? 'Auto placement'
+                  : task.recurrence?.mode === 'after_completion'
+                  ? dependencyLabel(task, tasks)
                   : task.nextDueDate
                   ? dayjs(task.nextDueDate).format('ddd, MMM D')
                   : '—'}

@@ -72,6 +72,10 @@ const DAILY = 'daily'
 const LONG_TERM_TASK = 'long_term_task'
 const LONG_TERM_GOAL = 'long_term_goal'
 
+const isDependencyScheduledTask = (task) => (task.category || OCCASIONAL) === OCCASIONAL && task.recurrence?.mode === 'after_completion' && !!task.triggerTaskId
+
+const isManualPlanningTask = (task) => (task.category || OCCASIONAL) === OCCASIONAL && !isDependencyScheduledTask(task)
+
 const isWithinWeek = (dateValue, weekStart, weekEnd) => {
   const parsed = dayjs(dateValue)
   if (!parsed.isValid()) return false
@@ -135,7 +139,7 @@ function App() {
     const nextPlan = {}
 
     tasks.forEach((task) => {
-      if ((task.category || OCCASIONAL) !== OCCASIONAL) return
+      if (!isManualPlanningTask(task)) return
       (task.scheduledSlots || []).forEach((slotIso) => {
         const slot = dayjs(slotIso)
         if (!slot.isValid()) return
@@ -471,7 +475,7 @@ function App() {
 
         try {
           const tasksToUpdate = tasks.filter((task) => (task.scheduledSlots || []).length)
-            .filter((task) => (task.category || OCCASIONAL) === OCCASIONAL)
+            .filter((task) => isManualPlanningTask(task))
           await Promise.all(tasksToUpdate.map((task) => apiUpdateTask({ ...task, scheduledSlots: [] })))
           const refreshedTasks = await fetchTasks()
           setTasks(refreshedTasks)
@@ -489,7 +493,7 @@ function App() {
 
       return (
         <PlanBoard
-          tasks={tasks.filter((task) => (task.category || OCCASIONAL) === OCCASIONAL)}
+          tasks={tasks.filter((task) => isManualPlanningTask(task))}
           history={history}
           weekStart={planWeekStart}
           planned={planned}
@@ -591,7 +595,7 @@ function App() {
 
       {renderView()}
 
-      <TaskModal open={taskModalOpen} initialTask={selectedTask} onClose={closeTaskModal} onSave={handleSaveTask} />
+      <TaskModal open={taskModalOpen} initialTask={selectedTask} availableTasks={tasks} onClose={closeTaskModal} onSave={handleSaveTask} />
     </div>
   )
 }
