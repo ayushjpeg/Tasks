@@ -221,7 +221,7 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
   })
 
   return {
-    start: startIso,
+    start: start.format('YYYY-MM-DD'),
     end: start.add(days - 1, 'day').format('YYYY-MM-DD'),
     days: plannerDays,
   }
