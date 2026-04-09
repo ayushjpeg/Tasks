@@ -51,6 +51,7 @@ const fromApiTask = (payload) => {
   const metadata = payload.metadata_json || {}
   return {
     id: payload.id,
+    category: payload.category || 'occasional',
     title: payload.title,
     description: payload.description || '',
     duration: payload.duration_minutes ?? metadata.duration ?? 30,
@@ -69,12 +70,14 @@ const fromApiTask = (payload) => {
     deferUntil: metadata.deferUntil ?? null,
     notesLog: metadata.notesLog ?? [],
     lastCompletedAt: metadata.lastCompletedAt ?? null,
+    assignedDates: metadata.assigned_dates || [],
     createdAt: payload.created_at,
     updatedAt: payload.updated_at,
   }
 }
 
 const toApiTaskPayload = (task) => ({
+  category: task.category || 'occasional',
   title: task.title,
   description: task.description,
   duration_minutes: task.duration,
@@ -94,6 +97,7 @@ const toApiTaskPayload = (task) => ({
     deferUntil: task.deferUntil ?? null,
     notesLog: task.notesLog ?? [],
     lastCompletedAt: task.lastCompletedAt ?? null,
+    assigned_dates: task.assignedDates !== undefined ? task.assignedDates : undefined,
   }),
 })
 

@@ -67,6 +67,10 @@ const buildPlanPayload = (planned = {}) =>
     })),
   )
 
+const OCCASIONAL = 'occasional'
+const DAILY = 'daily'
+const LONG_TERM = 'long_term'
+
 const isWithinWeek = (dateValue, weekStart, weekEnd) => {
   const parsed = dayjs(dateValue)
   if (!parsed.isValid()) return false
@@ -130,6 +134,7 @@ function App() {
     const nextPlan = {}
 
     tasks.forEach((task) => {
+      if ((task.category || OCCASIONAL) !== OCCASIONAL) return
       (task.scheduledSlots || []).forEach((slotIso) => {
         const slot = dayjs(slotIso)
         if (!slot.isValid()) return
@@ -285,9 +290,15 @@ function App() {
 
     try {
       setSyncMessage('Logging completion…')
-      const updated = completeTask(template, completionDate, trimmedNote || undefined, card.scheduledSlot)
-      const saved = await apiUpdateTask(updated)
-      setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+      if ((template.category || OCCASIONAL) === OCCASIONAL) {
+        const updated = completeTask(template, completionDate, trimmedNote || undefined, card.scheduledSlot)
+        const saved = await apiUpdateTask(updated)
+        setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+      } else {
+        const updated = completeTask(template, completionDate, trimmedNote || undefined)
+        const saved = await apiUpdateTask(updated)
+        setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+      }
       const historyEntry = await logTaskHistory(
         template.id,
         {
@@ -309,6 +320,7 @@ function App() {
   const handleSnoozeTask = async (card, referenceDate) => {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
+    if ((template.category || OCCASIONAL) !== OCCASIONAL) return
     const updatedTemplate = skipTaskOccurrence(template, referenceDate, card.scheduledSlot)
 
     try {
@@ -326,6 +338,7 @@ function App() {
   const handleRescheduleTask = async (card) => {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
+    if ((template.category || OCCASIONAL) !== OCCASIONAL) return
     const suggested = dayjs(card.dueDate ?? activeDate).add(1, 'day').format('YYYY-MM-DD')
     const nextDate = window.prompt('Move to which date? (YYYY-MM-DD)', suggested)
     if (!nextDate) return
@@ -366,6 +379,40 @@ function App() {
     } catch (error) {
       console.error('Failed to reschedule task', error)
       window.alert('Unable to reschedule right now.')
+    } finally {
+      setSyncMessage('')
+    }
+  }
+
+  const handleTaskStatus = async (card, referenceDate, status) => {
+    const template = tasks.find((item) => item.id === card.taskId)
+    if (!template) return
+
+    const entryStamp = dayjs(referenceDate).hour(12).minute(0).second(0).millisecond(0).toISOString()
+    const shouldUpdateTemplate = status === 'progress'
+
+    try {
+      setSyncMessage('Logging task status…')
+      if (shouldUpdateTemplate) {
+        const updated = completeTask(template, referenceDate)
+        const saved = await apiUpdateTask(updated)
+        setTasks((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+      }
+
+      const historyEntry = await logTaskHistory(
+        template.id,
+        {
+          completedAt: entryStamp,
+          durationMinutes: card.chunkMinutes ?? card.duration ?? template.duration,
+          note: '',
+          status,
+        },
+        template.title,
+      )
+      setHistory((prev) => [historyEntry, ...prev])
+    } catch (error) {
+      console.error('Failed to log task status', error)
+      window.alert('Unable to log that task status right now.')
     } finally {
       setSyncMessage('')
     }
@@ -415,7 +462,7 @@ function App() {
 
       const clearPlan = () => setPlanned({})
       const deletePlan = async () => {
-        const hasScheduled = tasks.some((task) => (task.scheduledSlots || []).length)
+        const hasScheduled = tasks.some((task) => (task.category || OCCASIONAL) === OCCASIONAL && (task.scheduledSlots || []).length)
         if (hasScheduled && !window.confirm('Delete all scheduled tasks from all weeks?')) return
 
         setSyncMessage('Deleting all scheduled tasks…')
@@ -423,6 +470,7 @@ function App() {
 
         try {
           const tasksToUpdate = tasks.filter((task) => (task.scheduledSlots || []).length)
+            .filter((task) => (task.category || OCCASIONAL) === OCCASIONAL)
           await Promise.all(tasksToUpdate.map((task) => apiUpdateTask({ ...task, scheduledSlots: [] })))
           const refreshedTasks = await fetchTasks()
           setTasks(refreshedTasks)
@@ -440,7 +488,7 @@ function App() {
 
       return (
         <PlanBoard
-          tasks={tasks}
+          tasks={tasks.filter((task) => (task.category || OCCASIONAL) === OCCASIONAL)}
           history={history}
           weekStart={planWeekStart}
           planned={planned}
@@ -486,6 +534,9 @@ function App() {
           onComplete={(task) => handleCompleteTask(task, activeDay?.date ?? activeDate)}
           onSnooze={(task) => handleSnoozeTask(task, activeDay?.date ?? activeDate)}
           onReschedule={handleRescheduleTask}
+          onLongTermProgress={(task) => handleTaskStatus(task, activeDay?.date ?? activeDate, 'progress')}
+          onLongTermNoProgress={(task) => handleTaskStatus(task, activeDay?.date ?? activeDate, 'did_not_progress')}
+          onSkipDaily={(task) => handleTaskStatus(task, activeDay?.date ?? activeDate, 'skipped')}
         />
       </>
     )

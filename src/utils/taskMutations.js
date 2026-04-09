@@ -23,6 +23,24 @@ const nextWeeklyFrom = (task, fromDate) => {
 }
 
 export const completeTask = (task, date, note, scheduledSlot = null) => {
+  if ((task.category || 'occasional') !== 'occasional') {
+    const done = dayjs(date)
+    const notesLog = task.notesLog ?? []
+    const noteEntry = note
+      ? {
+          id: nanoid(),
+          body: note,
+          recordedAt: done.toISOString(),
+        }
+      : null
+
+    return {
+      ...task,
+      lastCompletedAt: done.toISOString(),
+      notesLog: noteEntry ? [noteEntry, ...notesLog] : notesLog,
+    }
+  }
+
   const done = dayjs(date)
   const slots = task.scheduledSlots || []
   const remainingSlots = scheduledSlot
@@ -50,6 +68,13 @@ export const completeTask = (task, date, note, scheduledSlot = null) => {
 }
 
 export const skipTaskOccurrence = (task, date, scheduledSlot = null) => {
+  if ((task.category || 'occasional') !== 'occasional') {
+    return {
+      ...task,
+      deferUntil: null,
+    }
+  }
+
   const scheduledDate = dayjs(date)
   const slots = task.scheduledSlots || []
   const remainingSlots = scheduledSlot

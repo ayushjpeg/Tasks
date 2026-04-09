@@ -6,6 +6,7 @@ const statusColor = (status) => (status === 'late' ? '#ff9f1c' : '#7fdcff')
 const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove, onWeekChange, onClear, onDelete, planStatus }) => {
   const weekLabel = `${dayjs(weekStart).format('MMM D')} – ${dayjs(weekStart).add(6, 'day').format('MMM D')}`
   const recommendations = buildRecommendations({ tasks, history, weekStart, plannedSlots: planned })
+  const occasionals = tasks.filter((task) => (task.category || 'occasional') === 'occasional')
 
   const orderedTasksForDay = (date) => {
     const seen = new Set()
@@ -122,7 +123,7 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
                 <option value="" disabled>
                   Choose task
                 </option>
-                {tasks.map((task) => (
+                {occasionals.map((task) => (
                   <option key={task.id} value={task.id} disabled={plannedIdsForDay.has(task.id)}>
                     {task.title} ({task.duration} min){plannedIdsForDay.has(task.id) ? ' • already added today' : ''}
                   </option>

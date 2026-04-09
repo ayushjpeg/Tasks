@@ -38,6 +38,7 @@ const HistoryView = ({ history }) => {
                 <li key={entry.id}>
                   <div>
                     <span>{entry.title}</span>
+                    {entry.status && entry.status !== 'completed' && <p className="muted">Status: {entry.status.replaceAll('_', ' ')}</p>}
                     {entry.note && <p className="muted">{entry.note}</p>}
                   </div>
                   <span>{entry.duration} min</span>

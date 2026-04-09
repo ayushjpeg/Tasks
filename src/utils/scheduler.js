@@ -8,6 +8,20 @@ const labelForPriority = {
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
 
+const getCompletionDaysByTask = (history = []) => {
+  const completionDays = {}
+  history.forEach((entry) => {
+    const taskId = entry.taskId || entry.task_id
+    const completedAt = entry.completedAt || entry.completed_at
+    if (!taskId || !completedAt) return
+    const parsed = dayjs(completedAt)
+    if (!parsed.isValid()) return
+    if (!completionDays[taskId]) completionDays[taskId] = new Set()
+    completionDays[taskId].add(parsed.format('YYYY-MM-DD'))
+  })
+  return completionDays
+}
+
 const getLatestCompletionByTask = (tasks, history = []) => {
   const latest = {}
 
@@ -39,6 +53,7 @@ const buildTaskCard = (task, date, overrides = {}) => {
   return {
     id: `${task.id}-${date}-${overrides.part ?? 'core'}`,
     taskId: task.id,
+    category: task.category || 'occasional',
     title: task.title,
     description: task.description,
     duration,
@@ -74,12 +89,46 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
   const startIso = start.format('YYYY-MM-DD')
   const previousDay = start.subtract(1, 'day')
   const latestDoneByTask = getLatestCompletionByTask(tasks, history)
+  const completionDaysByTask = getCompletionDaysByTask(history)
   const plannerDays = Array.from({ length: days }, (_, index) => {
     const date = start.add(index, 'day')
     const iso = date.format('YYYY-MM-DD')
     const scheduledCards = []
 
     tasks.forEach((task) => {
+      const taskCategory = task.category || 'occasional'
+      const completionDays = completionDaysByTask[task.id] || new Set()
+
+      if (taskCategory === 'daily') {
+        if (!completionDays.has(iso)) {
+          scheduledCards.push(
+            buildTaskCard(task, iso, {
+              status: 'due',
+              type: 'daily',
+              dueDate: iso,
+              priorityLabel: 'Daily task',
+            }),
+          )
+        }
+        return
+      }
+
+      if (taskCategory === 'long_term') {
+        const assignedDates = (task.assignedDates || []).map((value) => dayjs(value)).filter((value) => value.isValid())
+        const assignedToday = assignedDates.some((value) => value.isSame(iso, 'day'))
+        if (assignedToday && !completionDays.has(iso)) {
+          scheduledCards.push(
+            buildTaskCard(task, iso, {
+              status: 'due',
+              type: 'long_term',
+              dueDate: iso,
+              priorityLabel: 'Long-term checkpoint',
+            }),
+          )
+        }
+        return
+      }
+
       const slots = (task.scheduledSlots || [])
         .map((value) => ({ raw: value, parsed: dayjs(value) }))
         .filter((slot) => slot.parsed.isValid())
@@ -114,9 +163,11 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
 
   const overdueSlots = tasks
     .flatMap((task) =>
-      (task.scheduledSlots || [])
-        .map((slot) => ({ task, slotRaw: slot, slot: dayjs(slot), latestDone: latestDoneByTask[task.id] }))
-        .filter(({ slot }) => slot.isValid()),
+      ((task.category || 'occasional') !== 'occasional'
+        ? []
+        : (task.scheduledSlots || [])
+            .map((slot) => ({ task, slotRaw: slot, slot: dayjs(slot), latestDone: latestDoneByTask[task.id] }))
+            .filter(({ slot }) => slot.isValid())),
     )
     .filter(({ slot, latestDone }) => {
       // Carry over only the immediately previous day, not all historical missed slots.

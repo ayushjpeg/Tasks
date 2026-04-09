@@ -73,6 +73,7 @@ export const buildRecommendations = ({ tasks = [], history = [], weekStart, plan
     const recommended = []
 
     tasks.forEach((task) => {
+      if ((task.category || 'occasional') !== 'occasional') return
       const historyLastDone = lastCompleted[task.id]
       const metaLastDone = task.lastCompletedAt ? dayjs(task.lastCompletedAt) : null
       const lastDone = historyLastDone || (metaLastDone?.isValid() ? metaLastDone : null)
