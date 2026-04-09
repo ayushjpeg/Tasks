@@ -4,7 +4,7 @@ const priorityAccent = {
   low: '#b59dff',
 }
 
-const DailyBoard = ({ day, onComplete, onSnooze, onReschedule, onLongTermProgress, onLongTermNoProgress, onSkipDaily }) => {
+const DailyBoard = ({ day, onComplete, onSnooze, onReschedule, onLongTermProgress, onLongTermNoProgress, onSkipDaily, isWorking = false }) => {
   if (!day) {
     return (
       <section className="panel">
@@ -62,40 +62,40 @@ const DailyBoard = ({ day, onComplete, onSnooze, onReschedule, onLongTermProgres
             <footer>
               {isLongTermGoal ? (
                 <>
-                  <button className="btn-primary" onClick={() => onLongTermProgress(task)}>
+                  <button className="btn-primary" onClick={() => onLongTermProgress(task)} disabled={isWorking}>
                     Progress
                   </button>
-                  <button className="btn-secondary" onClick={() => onLongTermNoProgress(task)}>
+                  <button className="btn-secondary" onClick={() => onLongTermNoProgress(task)} disabled={isWorking}>
                     Didn&apos;t progress
                   </button>
                 </>
               ) : isLongTermTask ? (
                 <>
-                  <button className="btn-primary" onClick={() => onComplete(task)}>
+                  <button className="btn-primary" onClick={() => onComplete(task)} disabled={isWorking}>
                     Mark done
                   </button>
-                  <button className="btn-secondary" onClick={() => onSkipDaily(task)}>
+                  <button className="btn-secondary" onClick={() => onSkipDaily(task)} disabled={isWorking}>
                     Skip today
                   </button>
                 </>
               ) : isDaily ? (
                 <>
-                  <button className="btn-primary" onClick={() => onComplete(task)}>
+                  <button className="btn-primary" onClick={() => onComplete(task)} disabled={isWorking}>
                     Done today
                   </button>
-                  <button className="btn-secondary" onClick={() => onSkipDaily(task)}>
+                  <button className="btn-secondary" onClick={() => onSkipDaily(task)} disabled={isWorking}>
                     Skip today
                   </button>
                 </>
               ) : (
                 <>
-                  <button className="btn-primary" onClick={() => onComplete(task)}>
+                  <button className="btn-primary" onClick={() => onComplete(task)} disabled={isWorking}>
                     Mark done
                   </button>
-                  <button className="btn-secondary" onClick={() => onSnooze(task)}>
+                  <button className="btn-secondary" onClick={() => onSnooze(task)} disabled={isWorking}>
                     {isFloating ? 'Pause a day' : 'Move to tomorrow'}
                   </button>
-                  <button className="btn-ghost" onClick={() => onReschedule(task)}>
+                  <button className="btn-ghost" onClick={() => onReschedule(task)} disabled={isWorking}>
                     Pick another day
                   </button>
                 </>

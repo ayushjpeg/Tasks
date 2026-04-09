@@ -116,6 +116,36 @@ const fromApiHistory = (record, fallbackTitle) => ({
   status: record.status || 'completed',
 })
 
+const fromApiPlannerTask = (task) => ({
+  id: task.id,
+  taskId: task.task_id,
+  category: task.category,
+  title: task.title,
+  description: task.description || '',
+  duration: task.duration,
+  chunkMinutes: task.chunk_minutes,
+  priority: task.priority,
+  priorityLabel: task.priority_label,
+  autop: Boolean(task.autop),
+  status: task.status,
+  type: task.type,
+  part: task.part,
+  dueDate: task.due_date,
+  scheduledSlot: task.scheduled_slot,
+  scheduledSlotsToClear: task.scheduled_slots_to_clear || [],
+  scheduledTime: task.scheduled_time,
+  window: task.window || 'any',
+  notesEnabled: task.notes_enabled ?? true,
+})
+
+const fromApiPlannerDay = (day) => ({
+  date: day.date,
+  label: day.label,
+  shortLabel: day.short_label,
+  tasks: (day.tasks || []).map(fromApiPlannerTask),
+  totalMinutes: day.total_minutes ?? 0,
+})
+
 export const fetchTasks = async () => {
   const data = await request('/tasks/')
   return data.map(fromApiTask)
@@ -148,6 +178,19 @@ export const fetchTaskHistory = async (limit = 250) => {
   return data.map((record) => fromApiHistory(record))
 }
 
+export const fetchPlanner = async ({ startDate, days = 7 } = {}) => {
+  const params = new URLSearchParams()
+  if (startDate) params.set('start_date', startDate)
+  if (days) params.set('days', String(days))
+  const suffix = params.size ? `?${params.toString()}` : ''
+  const data = await request(`/tasks/planner${suffix}`)
+  return {
+    start: data.start,
+    end: data.end,
+    days: (data.days || []).map(fromApiPlannerDay),
+  }
+}
+
 export const logTaskHistory = async (taskId, entry, fallbackTitle) => {
   const payload = {
     completed_at: entry.completedAt,
@@ -160,6 +203,27 @@ export const logTaskHistory = async (taskId, entry, fallbackTitle) => {
     body: JSON.stringify(payload),
   })
   return fromApiHistory(data, fallbackTitle)
+}
+
+export const applyTaskAction = async (taskId, action) => {
+  const payload = {
+    action: action.action,
+    action_date: action.actionDate,
+    duration_minutes: action.durationMinutes,
+    note: action.note || '',
+    status: action.status || 'completed',
+    scheduled_slot: action.scheduledSlot || null,
+    scheduled_slots_to_clear: action.scheduledSlotsToClear || [],
+    target_date: action.targetDate || null,
+  }
+  const data = await request(`/tasks/${taskId}/action`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return {
+    task: data?.task ? fromApiTask(data.task) : null,
+    history: data?.history ? fromApiHistory(data.history) : null,
+  }
 }
 
 export const schedulePreview = async (weekStart, weekEnd) => {
