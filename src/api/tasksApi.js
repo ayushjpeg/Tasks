@@ -49,9 +49,10 @@ const cleanObject = (input) => {
 
 const fromApiTask = (payload) => {
   const metadata = payload.metadata_json || {}
+  const normalizedCategory = payload.category === 'long_term' ? 'long_term_goal' : (payload.category || 'occasional')
   return {
     id: payload.id,
-    category: payload.category || 'occasional',
+    category: normalizedCategory,
     title: payload.title,
     description: payload.description || '',
     duration: payload.duration_minutes ?? metadata.duration ?? 30,
@@ -70,7 +71,7 @@ const fromApiTask = (payload) => {
     deferUntil: metadata.deferUntil ?? null,
     notesLog: metadata.notesLog ?? [],
     lastCompletedAt: metadata.lastCompletedAt ?? null,
-    assignedDates: metadata.assigned_dates || [],
+    assignedWeekdays: metadata.assigned_weekdays || [],
     createdAt: payload.created_at,
     updatedAt: payload.updated_at,
   }
@@ -97,7 +98,7 @@ const toApiTaskPayload = (task) => ({
     deferUntil: task.deferUntil ?? null,
     notesLog: task.notesLog ?? [],
     lastCompletedAt: task.lastCompletedAt ?? null,
-    assigned_dates: task.assignedDates !== undefined ? task.assignedDates : undefined,
+    assigned_weekdays: task.assignedWeekdays !== undefined ? task.assignedWeekdays : undefined,
   }),
 })
 

@@ -1,8 +1,16 @@
 import dayjs from '../utils/dates'
 
+const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const describeAssignedWeekdays = (task) => {
+  const values = (task.assignedWeekdays || []).map((value) => weekdayLabels[value]).filter(Boolean)
+  return values.length ? values.join(', ') : 'No weekdays set'
+}
+
 const describeRecurrence = (task) => {
   if (task.category === 'daily') return 'Daily'
-  if (task.category === 'long_term') return `Long term • ${task.assignedDates?.length || 0} checkpoints`
+  if (task.category === 'long_term_task') return `Long-term task • ${describeAssignedWeekdays(task)}`
+  if (task.category === 'long_term_goal') return `Long-term goal • ${describeAssignedWeekdays(task)}`
   const mode = task.recurrence?.mode
   const start = task.recurrence?.start_after_days ?? 0
   const end = task.recurrence?.end_before_days ?? start
@@ -40,8 +48,8 @@ const TaskLibrary = ({ tasks, onCreate, onEdit, onDelete }) => (
               <strong>
                 {task.category === 'daily'
                   ? 'Every day'
-                  : task.category === 'long_term'
-                  ? task.assignedDates?.[0] || '—'
+                  : task.category === 'long_term_task' || task.category === 'long_term_goal'
+                  ? describeAssignedWeekdays(task)
                   : task.recurrence?.mode === 'floating'
                   ? 'Auto placement'
                   : task.nextDueDate

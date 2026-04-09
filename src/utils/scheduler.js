@@ -7,6 +7,8 @@ const labelForPriority = {
 }
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
+const LONG_TERM_TASK = 'long_term_task'
+const LONG_TERM_GOAL = 'long_term_goal'
 
 const getCompletionDaysByTask = (history = []) => {
   const completionDays = {}
@@ -113,16 +115,16 @@ export const buildPlanner = ({ tasks = [], history = [], startDate = dayjs(), da
         return
       }
 
-      if (taskCategory === 'long_term') {
-        const assignedDates = (task.assignedDates || []).map((value) => dayjs(value)).filter((value) => value.isValid())
-        const assignedToday = assignedDates.some((value) => value.isSame(iso, 'day'))
+      if (taskCategory === LONG_TERM_TASK || taskCategory === LONG_TERM_GOAL) {
+        const assignedWeekdays = Array.isArray(task.assignedWeekdays) ? task.assignedWeekdays : []
+        const assignedToday = assignedWeekdays.includes(date.day())
         if (assignedToday && !completionDays.has(iso)) {
           scheduledCards.push(
             buildTaskCard(task, iso, {
               status: 'due',
-              type: 'long_term',
+              type: taskCategory,
               dueDate: iso,
-              priorityLabel: 'Long-term checkpoint',
+              priorityLabel: taskCategory === LONG_TERM_GOAL ? 'Long-term goal' : 'Long-term task',
             }),
           )
         }

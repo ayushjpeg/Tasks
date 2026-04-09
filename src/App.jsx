@@ -69,7 +69,8 @@ const buildPlanPayload = (planned = {}) =>
 
 const OCCASIONAL = 'occasional'
 const DAILY = 'daily'
-const LONG_TERM = 'long_term'
+const LONG_TERM_TASK = 'long_term_task'
+const LONG_TERM_GOAL = 'long_term_goal'
 
 const isWithinWeek = (dateValue, weekStart, weekEnd) => {
   const parsed = dayjs(dateValue)
@@ -389,7 +390,7 @@ function App() {
     if (!template) return
 
     const entryStamp = dayjs(referenceDate).hour(12).minute(0).second(0).millisecond(0).toISOString()
-    const shouldUpdateTemplate = status === 'progress'
+    const shouldUpdateTemplate = status === 'progress' || (template.category || OCCASIONAL) === LONG_TERM_TASK
 
     try {
       setSyncMessage('Logging task status…')

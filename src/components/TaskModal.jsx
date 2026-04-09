@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react'
 import { nanoid } from 'nanoid'
 import dayjs from '../utils/dates'
 
+const weekdayOptions = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' },
+]
+
 const defaultTask = {
   id: '',
   category: 'occasional',
@@ -15,18 +25,16 @@ const defaultTask = {
   maxChunkMinutes: 60,
   recurrence: { mode: 'repeat', start_after_days: 0, end_before_days: 7 },
   nextDueDate: dayjs().format('YYYY-MM-DD'),
-  assignedDates: [],
+  assignedWeekdays: [],
 }
 
 const TaskModal = ({ open, initialTask, onSave, onClose }) => {
   const [form, setForm] = useState(defaultTask)
-  const [assignedDateInput, setAssignedDateInput] = useState(dayjs().format('YYYY-MM-DD'))
 
   useEffect(() => {
     if (open) {
-      const nextForm = initialTask ? { ...defaultTask, ...initialTask, assignedDates: initialTask.assignedDates || [] } : defaultTask
+      const nextForm = initialTask ? { ...defaultTask, ...initialTask, assignedWeekdays: initialTask.assignedWeekdays || [] } : defaultTask
       setForm(nextForm)
-      setAssignedDateInput(nextForm.assignedDates?.[0] || dayjs().format('YYYY-MM-DD'))
     }
   }, [open, initialTask])
 
@@ -34,11 +42,12 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
 
   const update = (patch) => setForm((prev) => ({ ...prev, ...patch }))
   const updateRecurrence = (patch) => update({ recurrence: { ...form.recurrence, ...patch } })
-  const addAssignedDate = () => {
-    if (!assignedDateInput) return
-    update({ assignedDates: [...new Set([...(form.assignedDates || []), assignedDateInput])].sort() })
+  const toggleWeekday = (value) => {
+    const set = new Set(form.assignedWeekdays || [])
+    if (set.has(value)) set.delete(value)
+    else set.add(value)
+    update({ assignedWeekdays: [...set].sort((a, b) => a - b) })
   }
-  const removeAssignedDate = (value) => update({ assignedDates: (form.assignedDates || []).filter((item) => item !== value) })
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -66,7 +75,8 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
           <select value={form.category} onChange={(event) => update({ category: event.target.value })}>
             <option value="daily">Daily</option>
             <option value="occasional">Occasional</option>
-            <option value="long_term">Long term</option>
+            <option value="long_term_task">Long-term task</option>
+            <option value="long_term_goal">Long-term goal</option>
           </select>
         </label>
         <label>
@@ -153,21 +163,26 @@ const TaskModal = ({ open, initialTask, onSave, onClose }) => {
           </fieldset>
         )}
         {form.category === 'daily' && <p className="muted">Daily tasks are placed automatically every day and never appear in the plan tab.</p>}
-        {form.category === 'long_term' && (
+        {(form.category === 'long_term_task' || form.category === 'long_term_goal') && (
           <fieldset className="field-group">
-            <legend>Assigned days</legend>
-            <div className="quick-actions">
-              <input type="date" value={assignedDateInput} onChange={(event) => setAssignedDateInput(event.target.value)} />
-              <button type="button" className="btn-secondary" onClick={addAssignedDate}>Add date</button>
-            </div>
+            <legend>Assigned weekdays</legend>
             <div className="pill-row">
-              {(form.assignedDates || []).map((value) => (
-                <button key={value} type="button" className="chip chip--active" onClick={() => removeAssignedDate(value)}>
-                  {value} ×
+              {weekdayOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={(form.assignedWeekdays || []).includes(option.value) ? 'chip chip--active' : 'chip'}
+                  onClick={() => toggleWeekday(option.value)}
+                >
+                  {option.label}
                 </button>
               ))}
             </div>
-            <p className="muted">Long-term tasks appear directly on these selected dates with progress / didn&apos;t progress actions.</p>
+            <p className="muted">
+              {form.category === 'long_term_goal'
+                ? 'Long-term goals appear every selected weekday with progress / didn\'t progress actions.'
+                : 'Long-term tasks appear every selected weekday and can be marked completed.'}
+            </p>
           </fieldset>
         )}
         <footer>

@@ -35,7 +35,8 @@ const DailyBoard = ({ day, onComplete, onSnooze, onReschedule, onLongTermProgres
         {day.tasks.map((task) => {
           const isFloating = task.status === 'floating'
           const isDaily = task.category === 'daily'
-          const isLongTerm = task.category === 'long_term'
+          const isLongTermGoal = task.category === 'long_term_goal'
+          const isLongTermTask = task.category === 'long_term_task'
           return (
             <article
               key={task.id}
@@ -59,13 +60,22 @@ const DailyBoard = ({ day, onComplete, onSnooze, onReschedule, onLongTermProgres
               {isFloating && <span className="pill pill--soft">Floating chunk</span>}
             </div>
             <footer>
-              {isLongTerm ? (
+              {isLongTermGoal ? (
                 <>
                   <button className="btn-primary" onClick={() => onLongTermProgress(task)}>
                     Progress
                   </button>
                   <button className="btn-secondary" onClick={() => onLongTermNoProgress(task)}>
                     Didn&apos;t progress
+                  </button>
+                </>
+              ) : isLongTermTask ? (
+                <>
+                  <button className="btn-primary" onClick={() => onComplete(task)}>
+                    Mark done
+                  </button>
+                  <button className="btn-secondary" onClick={() => onSkipDaily(task)}>
+                    Skip today
                   </button>
                 </>
               ) : isDaily ? (
