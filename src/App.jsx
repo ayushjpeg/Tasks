@@ -75,6 +75,8 @@ const isDependencyScheduledTask = (task) => (task.category || OCCASIONAL) === OC
 
 const isManualPlanningTask = (task) => (task.category || OCCASIONAL) === OCCASIONAL && !isDependencyScheduledTask(task)
 
+const toLocalActionDateTime = (value) => dayjs(value).hour(12).minute(0).second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ss')
+
 const isWithinWeek = (dateValue, weekStart, weekEnd) => {
   const parsed = dayjs(dateValue)
   if (!parsed.isValid()) return false
@@ -312,7 +314,7 @@ function App() {
       setSyncMessage('Logging completion…')
       await applyTaskAction(template.id, {
         action: 'complete',
-        actionDate: dayjs(completionDate).toISOString(),
+        actionDate: toLocalActionDateTime(completionDate),
         durationMinutes: card.chunkMinutes ?? card.duration ?? template.duration,
         note: '',
         status: 'completed',
@@ -337,7 +339,7 @@ function App() {
       setSyncMessage('Updating task…')
       await applyTaskAction(template.id, {
         action: 'snooze',
-        actionDate: dayjs(referenceDate).hour(12).minute(0).second(0).millisecond(0).toISOString(),
+        actionDate: toLocalActionDateTime(referenceDate),
         scheduledSlot: card.scheduledSlot,
         scheduledSlotsToClear: card.scheduledSlotsToClear || [],
       })
@@ -368,7 +370,7 @@ function App() {
       setSyncMessage('Rescheduling task…')
       await applyTaskAction(template.id, {
         action: 'reschedule',
-        actionDate: dayjs(card.dueDate ?? activeDate).hour(12).minute(0).second(0).millisecond(0).toISOString(),
+        actionDate: toLocalActionDateTime(card.dueDate ?? activeDate),
         scheduledSlot: card.scheduledSlot,
         scheduledSlotsToClear: card.scheduledSlotsToClear || [],
         targetDate: formatted,
@@ -386,7 +388,7 @@ function App() {
     const template = tasks.find((item) => item.id === card.taskId)
     if (!template) return
 
-    const entryStamp = dayjs(referenceDate).hour(12).minute(0).second(0).millisecond(0).toISOString()
+    const entryStamp = toLocalActionDateTime(referenceDate)
 
     try {
       setSyncMessage('Logging task status…')
