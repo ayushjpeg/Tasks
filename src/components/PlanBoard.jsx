@@ -3,7 +3,7 @@ import { buildRecommendations } from '../utils/recommendations'
 
 const statusColor = (status) => (status === 'late' ? '#ff9f1c' : '#7fdcff')
 
-const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove, onWeekChange, onClear, onDelete, planStatus }) => {
+const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove, onWeekChange, planStatus }) => {
   const weekLabel = `${dayjs(weekStart).format('MMM D')} – ${dayjs(weekStart).add(6, 'day').format('MMM D')}`
   const recommendations = buildRecommendations({ tasks, history, weekStart, plannedSlots: planned })
   const occasionals = tasks.filter((task) => (task.category || 'occasional') === 'occasional')
@@ -39,12 +39,6 @@ const PlanBoard = ({ tasks, history, weekStart, planned, onAdd, onRemove, onMove
           </button>
           <button className="btn-ghost" onClick={() => onWeekChange(dayjs().startOf('week'))}>
             This week
-          </button>
-          <button className="btn-secondary" onClick={onClear}>
-            Clear
-          </button>
-          <button className="btn-danger" onClick={onDelete}>
-            Delete week plan
           </button>
         </div>
       </header>
